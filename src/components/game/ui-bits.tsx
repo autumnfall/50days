@@ -29,8 +29,8 @@ export function Panel({ title, icon, children, className, extra, ...rest }: {
 } & React.HTMLAttributes<HTMLElement>) {
   return (
     <section className={cn('rounded-xl border border-stone-700/60 bg-stone-900/70 backdrop-blur-sm shadow-lg', className)} {...rest}>
-      <header className="flex items-center justify-between gap-2 border-b border-stone-700/60 px-4 py-2.5">
-        <h2 className="flex items-center gap-2 text-sm font-bold tracking-wide text-stone-200">
+      <header className="flex items-center justify-between gap-2 border-b border-stone-700/60 px-4 py-2.5 flex-nowrap min-w-0">
+        <h2 className="flex items-center gap-2 text-sm font-bold tracking-wide text-stone-200 shrink-0">
           <span className="text-base">{icon}</span>
           {title}
         </h2>

@@ -57,12 +57,12 @@ export default function BuildPanel({
       icon="🔨"
       data-tutorial="build-panel"
       extra={
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             onClick={onRecruit}
             disabled={!canRecruit}
             className={cn(
-              'flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold transition',
+              'flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-bold transition whitespace-nowrap',
               canRecruit ? 'bg-emerald-700/80 text-emerald-100 hover:bg-emerald-600' : 'cursor-not-allowed bg-stone-800 text-stone-500',
             )}
             title="消耗食物招募一位新村民（需要空余住房）"
@@ -73,12 +73,12 @@ export default function BuildPanel({
             onClick={onRecruitMax}
             disabled={maxN <= 0}
             className={cn(
-              'rounded-lg px-2 py-1 text-xs font-bold transition',
+              'rounded px-1.5 py-0.5 text-[11px] font-bold transition whitespace-nowrap',
               maxN > 0 ? 'bg-emerald-900/70 text-emerald-200 hover:bg-emerald-800' : 'cursor-not-allowed bg-stone-800 text-stone-500',
             )}
-            title={`一次招募 ${maxN} 人（min 食物可负担, 剩余住房）`}
+            title={`一次招募 ${maxN} 人`}
           >
-            招满 ×{maxN}（🌾{totalCost}）
+            ×{maxN}
           </button>
         </div>
       }
