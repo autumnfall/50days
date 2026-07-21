@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { CONFIG, NATIONS, type NationId } from '@/game/config'
+import { hasAnySave } from '@/game/save'
 import { cn } from '@/lib/utils'
 
-export default function StartScreen({ onStart }: { onStart: (nation: NationId) => void }) {
+export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId) => void; onLoad?: (slot: number) => void }) {
   const [selected, setSelected] = useState<NationId | null>(null)
 
   return (
@@ -21,7 +22,7 @@ export default function StartScreen({ onStart }: { onStart: (nation: NationId) =
           <p className="mt-2 text-sm tracking-wider text-stone-400">— 回合制生存策略 · 致敬《50 Years》—</p>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-stone-300">
             第 {CONFIG.firstWaveDay} 天起，黑暗大军<b className="text-red-300">随时可能进犯</b>（每天 20% 概率，逐日递增，第 5 天必来），且一波比一波强。
-            带领你的族人采集、建造、练兵，撑过 <b className="text-amber-300">{CONFIG.totalDays}</b> 天即为胜利！
+            第 {CONFIG.totalDays} 天将迎来<b className="text-red-300">终局决战</b>，击败最终敌人才能获胜！
           </p>
         </div>
 
@@ -73,6 +74,15 @@ export default function StartScreen({ onStart }: { onStart: (nation: NationId) =
         >
           {selected ? `以「${NATIONS[selected].name}」开局` : '请先选择文明'}
         </button>
+
+        {onLoad && hasAnySave() && (
+          <button
+            onClick={() => onLoad(0)}
+            className="mt-3 w-full rounded-xl border border-stone-700 bg-stone-800/60 py-3 text-sm font-bold text-stone-300 transition hover:border-stone-500 hover:bg-stone-700/60 active:scale-[0.98]"
+          >
+            📂 继续游戏（读取自动存档）
+          </button>
+        )}
       </div>
     </div>
   )

@@ -20,15 +20,15 @@ export function CostTag({ cost, resources }: { cost: Partial<Record<ResourceId, 
 }
 
 /** 面板容器 */
-export function Panel({ title, icon, children, className, extra }: {
+export function Panel({ title, icon, children, className, extra, ...rest }: {
   title: string
   icon: string
   children: ReactNode
   className?: string
   extra?: ReactNode
-}) {
+} & React.HTMLAttributes<HTMLElement>) {
   return (
-    <section className={cn('rounded-xl border border-stone-700/60 bg-stone-900/70 backdrop-blur-sm shadow-lg', className)}>
+    <section className={cn('rounded-xl border border-stone-700/60 bg-stone-900/70 backdrop-blur-sm shadow-lg', className)} {...rest}>
       <header className="flex items-center justify-between gap-2 border-b border-stone-700/60 px-4 py-2.5">
         <h2 className="flex items-center gap-2 text-sm font-bold tracking-wide text-stone-200">
           <span className="text-base">{icon}</span>

@@ -76,6 +76,8 @@ export interface GameState {
   wavesFaced: number
   /** 上一波来袭的天数（初始 2，使第 3 天来袭概率为 20%） */
   lastWaveDay: number
+  /** 是否已击败终局 Boss */
+  defeatedFinalBoss: boolean
 }
 
 // ---------------- 初始化 ----------------
@@ -102,6 +104,7 @@ export function createGame(): GameState {
     omen: false,
     wavesFaced: 0,
     lastWaveDay: 2,
+    defeatedFinalBoss: false,
   }
 }
 
@@ -305,6 +308,12 @@ export function armyPower(s: GameState): number {
 
 export function wavePower(w: WaveInfo): number {
   return Math.round(w.count * w.atkEach)
+}
+
+/** 终局 Boss：固定为第 20 波难度 */
+export function finalBossWave(): WaveInfo {
+  const w = getWave(20)
+  return { ...w, wave: 0, name: '终局决战 · ' + w.name, icon: '💀' }
 }
 
 /** 每日食物总消耗：村民 2/天，士兵按兵种 3~4/天 */
@@ -546,28 +555,38 @@ export function endTurn(s: GameState): GameState {
     }
   }
 
-  // 6. 随机波次：第 3 天起每天判定，概率 20% 逐日递增
-  const chance = waveChanceForDay(ns, newDay)
-  if (chance > 0 && Math.random() < chance) {
-    const wave = getWave(ns.wavesFaced + 1)
-    if (ns.omen) {
-      wave.count = Math.round(wave.count * 1.25)
-      wave.hpEach = Math.round(wave.hpEach * 1.2)
-    }
-    ns = {
-      ...ns,
-      wavesFaced: ns.wavesFaced + 1,
-      lastWaveDay: newDay,
-      log: pushLog(ns, `📯 敌情突现！第 ${ns.wavesFaced + 1} 波敌军来袭！`, 'battle'),
-    }
-    ns = resolveBattle(ns, wave)
-    ns = { ...ns, omen: false }
+  // 6. 波次判定
+  if (newDay >= CONFIG.totalDays) {
+    // 终局 Boss：最后一天必定遭遇，固定第 20 波难度
+    const boss = finalBossWave()
+    ns = { ...ns, omen: false, log: pushLog(ns, `💀 黑暗大军压境！终局决战开始！`, 'battle') }
+    ns = resolveBattle(ns, boss)
     if (ns.phase === 'defeat') return ns
+    ns = { ...ns, defeatedFinalBoss: true }
+  } else {
+    // 随机波次：第 3 天起每天判定，概率 20% 逐日递增
+    const chance = waveChanceForDay(ns, newDay)
+    if (chance > 0 && Math.random() < chance) {
+      const wave = getWave(ns.wavesFaced + 1)
+      if (ns.omen) {
+        wave.count = Math.round(wave.count * 1.25)
+        wave.hpEach = Math.round(wave.hpEach * 1.2)
+      }
+      ns = {
+        ...ns,
+        wavesFaced: ns.wavesFaced + 1,
+        lastWaveDay: newDay,
+        log: pushLog(ns, `📯 敌情突现！第 ${ns.wavesFaced + 1} 波敌军来袭！`, 'battle'),
+      }
+      ns = resolveBattle(ns, wave)
+      ns = { ...ns, omen: false }
+      if (ns.phase === 'defeat') return ns
+    }
   }
 
-  // 7. 胜利判定
-  if (newDay > CONFIG.totalDays) {
-    return { ...ns, phase: 'victory', log: pushLog(ns, '🎉 王国的援军抵达了！你守住了 50 天！', 'good') }
+  // 7. 胜利判定（必须击败终局 Boss）
+  if (newDay > CONFIG.totalDays && ns.defeatedFinalBoss) {
+    return { ...ns, phase: 'victory', log: pushLog(ns, '🎉 黑暗大军被击溃！王国的援军抵达了！你守住了 50 天！', 'good') }
   }
   return ns
 }
@@ -831,8 +850,8 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
 
 export function closeBattleReport(s: GameState): GameState {
   if (s.phase !== 'battle') return s
-  if (s.day >= CONFIG.totalDays) {
-    return { ...s, phase: 'victory', battle: null, log: pushLog(s, '🎉 王国的援军抵达了！你守住了 50 天！', 'good') }
+  if (s.defeatedFinalBoss) {
+    return { ...s, phase: 'victory', battle: null, log: pushLog(s, '🎉 黑暗大军被击溃！王国的援军抵达了！你守住了 50 天！', 'good') }
   }
   return { ...s, phase: 'playing', battle: null }
 }

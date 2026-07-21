@@ -35,6 +35,7 @@ export default function AssignmentPanel({
     <Panel
       title="村民分配"
       icon="🧑‍🌾"
+      data-tutorial="assignment-panel"
       extra={
         <span className="text-xs text-stone-400">
           村民 <b className="text-stone-200">{state.villagers}</b> · 空闲 <b className={idle > 0 ? 'text-emerald-400' : 'text-stone-500'}>{idle}</b>

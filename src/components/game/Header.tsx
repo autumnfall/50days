@@ -1,16 +1,20 @@
-import { useState } from 'react'
 import { CONFIG, NATIONS, RESOURCE_INFO, type ResourceId } from '@/game/config'
-import { armyPower, foodUpkeep, nextWave, popCap, population, soldierCount, waveChanceTomorrow, wavePower, type GameState } from '@/game/engine'
+import { armyPower, finalBossWave, foodUpkeep, nextWave, popCap, population, soldierCount, waveChanceTomorrow, wavePower, type GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
-import HelpModal from './HelpModal'
 
-export default function Header({ state }: { state: GameState }) {
-  const [showHelp, setShowHelp] = useState(false)
+export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
+  state: GameState
+  onOpenSaveLoad?: (mode: 'save' | 'load') => void
+  onTutorial?: () => void
+  onHelp?: () => void
+}) {
   const chance = waveChanceTomorrow(state)
   const wave = nextWave(state)
   const myPower = armyPower(state)
   const enemyPower = wavePower(wave)
   const danger = myPower < enemyPower
+  const boss = finalBossWave()
+  const bossPower = wavePower(boss)
 
   return (
     <header className="sticky top-0 z-20 border-b border-stone-700/60 bg-stone-950/90 backdrop-blur-md">
@@ -38,7 +42,7 @@ export default function Header({ state }: { state: GameState }) {
         </div>
 
         {/* 资源 */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5" data-tutorial="resources">
           {(Object.keys(RESOURCE_INFO) as ResourceId[]).map((r) => (
             <div key={r} className="flex items-center gap-1 rounded-lg bg-stone-800/80 px-2.5 py-1" title={RESOURCE_INFO[r].name}>
               <span>{RESOURCE_INFO[r].icon}</span>
@@ -60,7 +64,7 @@ export default function Header({ state }: { state: GameState }) {
         </div>
 
         {/* 波次预警 */}
-        <div
+        <div data-tutorial="wave-warning"
           className={cn(
             'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs',
             chance >= 1
@@ -69,7 +73,7 @@ export default function Header({ state }: { state: GameState }) {
                 ? 'border-orange-500/50 bg-orange-950/40 text-orange-300'
                 : 'border-stone-600 bg-stone-800/60 text-stone-300',
           )}
-          title={`第 ${wave.wave} 波：${wave.count} 只${wave.name} · 我方战力 ${myPower} vs 敌方约 ${enemyPower}`}
+          title={`第 ${wave.wave} 波：${wave.count} 只${wave.name} · 我方战力 ${myPower} vs 敌方约 ${enemyPower}\n终局 Boss：${boss.count} 只${boss.name} · 战力 ${bossPower}`}
         >
           <span className="text-base">{wave.icon}</span>
           <span>
@@ -79,18 +83,47 @@ export default function Header({ state }: { state: GameState }) {
           <span className={cn('font-bold', danger ? 'text-red-400' : 'text-emerald-400')}>
             {danger ? '⚠️ 战力不足' : '✓ 有信心'}
           </span>
+          <span className="hidden text-[11px] text-stone-400 sm:inline">
+            · 终局 💀{bossPower}
+          </span>
         </div>
 
-        {/* 帮助 */}
+        {/* 存档/读档/教程/帮助 */}
+        {state.phase === 'playing' && onOpenSaveLoad && (
+          <button
+            onClick={() => onOpenSaveLoad('save')}
+            className="rounded-lg bg-stone-800/80 px-2.5 py-1.5 text-sm text-stone-300 transition hover:bg-stone-700"
+            title="保存游戏"
+          >
+            💾
+          </button>
+        )}
+        {onOpenSaveLoad && (
+          <button
+            onClick={() => onOpenSaveLoad('load')}
+            className="rounded-lg bg-stone-800/80 px-2.5 py-1.5 text-sm text-stone-300 transition hover:bg-stone-700"
+            title="读取存档"
+          >
+            📂
+          </button>
+        )}
+        {onTutorial && (
+          <button
+            onClick={onTutorial}
+            className="rounded-lg bg-stone-800/80 px-2.5 py-1.5 text-sm text-stone-300 transition hover:bg-stone-700"
+            title="教程"
+          >
+            📖
+          </button>
+        )}
         <button
-          onClick={() => setShowHelp(true)}
+          onClick={onHelp}
           className="rounded-lg bg-stone-800/80 px-2.5 py-1.5 text-sm text-stone-300 transition hover:bg-stone-700"
           title="游戏规则"
         >
           ❓
         </button>
       </div>
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </header>
   )
 }

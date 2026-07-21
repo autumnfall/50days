@@ -1,6 +1,6 @@
 import type { GameState } from '@/game/engine'
 
-export default function EndScreen({ state, onRestart }: { state: GameState; onRestart: () => void }) {
+export default function EndScreen({ state, onRestart, onLoad }: { state: GameState; onRestart: () => void; onLoad?: (slot: number) => void }) {
   const victory = state.phase === 'victory'
   return (
     <div
@@ -42,6 +42,14 @@ export default function EndScreen({ state, onRestart }: { state: GameState; onRe
         >
           再 来 一 局
         </button>
+        {onLoad && (
+          <button
+            onClick={() => onLoad(0)}
+            className="mt-3 w-full rounded-xl border border-stone-700 bg-stone-800/60 py-3 text-sm font-bold text-stone-300 transition hover:border-stone-500 hover:bg-stone-700/60 active:scale-[0.98]"
+          >
+            📂 读取存档
+          </button>
+        )}
       </div>
     </div>
   )

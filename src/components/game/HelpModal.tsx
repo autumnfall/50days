@@ -30,6 +30,9 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
             <p>· 第 {CONFIG.firstWaveDay} 天起，每天清晨有概率遭遇下一波敌军：<b className="text-orange-300">初始 20%，每过一天 +20%，第 5 天必来</b>。</p>
             <p>· 因此<b>总波数并不固定</b>（平均约 15~20 波），顶部预警会显示明日来袭概率。</p>
             <p>· 每一波敌军的数量、生命、攻击都会按<b className="text-red-300">指数增长</b>——越到后期越恐怖，切勿拖延备战。</p>
+            <p className="rounded-lg bg-red-950/40 p-2.5">
+              <b className="text-red-300">💀 终局决战：</b>第 50 天结束时，必定遭遇终局 Boss（固定第 20 波难度）。<b>只有击败终局 Boss 才能获得胜利！</b>
+            </p>
           </Section>
 
           <Section title="👥 人口与住房">

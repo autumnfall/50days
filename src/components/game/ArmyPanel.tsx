@@ -17,6 +17,7 @@ export default function ArmyPanel({
     <Panel
       title="军队训练"
       icon="🎖️"
+      data-tutorial="army-panel"
       extra={
         <span className="text-xs text-stone-400">
           士兵 <b className="text-stone-200">{soldierCount(state)}</b> · 战力 <b className="text-red-300">{armyPower(state)}</b>
