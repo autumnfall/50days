@@ -1,4 +1,4 @@
-import type { DungeonResult } from '@/game/dungeon'
+import type { DungeonResult } from '@/game/engine'
 import type { UnitId } from '@/game/config'
 
 const UNIT_INFO: Record<UnitId, { name: string; icon: string }> = {
