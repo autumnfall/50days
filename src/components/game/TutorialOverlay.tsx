@@ -52,22 +52,27 @@ export default function TutorialOverlay({
       })()
 
   return (
-    <div className="fixed inset-0 z-[60]" onClick={(e) => { if (e.target === e.currentTarget) onSkip() }}>
-      {/* 背景遮罩 */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" />
+    <div className="fixed inset-0 z-[60]">
+      {/* 透明全屏拦截层：阻止底层所有点击 */}
+      <div className="absolute inset-0" />
 
-      {/* 高亮切口 */}
+      {/* 有目标时：用 box-shadow 同时实现遮罩+切口 */}
       {targetPos && (
         <div
           className="absolute rounded-xl"
           style={{
-            top: targetPos.top - 4,
-            left: targetPos.left - 4,
-            width: targetPos.width + 8,
-            height: targetPos.height + 8,
-            boxShadow: '0 0 0 9999px rgba(0,0,0,0.7)',
+            top: targetPos.top - 6,
+            left: targetPos.left - 6,
+            width: targetPos.width + 12,
+            height: targetPos.height + 12,
+            boxShadow: '0 0 0 9999px rgba(0,0,0,0.75), 0 0 20px 4px rgba(245,158,11,0.5), inset 0 0 20px 4px rgba(245,158,11,0.15)',
           }}
         />
+      )}
+
+      {/* 无目标时（居中步骤）：用普通遮罩 */}
+      {!targetPos && (
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" />
       )}
 
       {/* 提示卡片 */}
@@ -75,7 +80,7 @@ export default function TutorialOverlay({
         ref={tooltipRef}
         style={tooltipStyle}
         className={cn(
-          'absolute z-10 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-amber-600/40 bg-stone-900/95 p-5 shadow-2xl backdrop-blur-sm',
+          'pointer-events-auto absolute z-10 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-amber-600/40 bg-stone-900/95 p-5 shadow-2xl backdrop-blur-sm',
           isCentered && 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
         )}
       >
