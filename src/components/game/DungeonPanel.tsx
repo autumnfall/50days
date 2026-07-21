@@ -12,9 +12,11 @@ export default function DungeonPanel({
   onEnter: (floor: number) => void
 }) {
   const [selected, setSelected] = useState<number | null>(null)
-  const { highestCleared, dailyAttempted } = state.dungeon
+  const dungeon = state.dungeon ?? { highestCleared: 0, dailyAttempted: false, pendingResult: null }
+  const { highestCleared, dailyAttempted } = dungeon
   const nextFloor = highestCleared + 1
-  const totalSoldiers = state.soldiers.militia + state.soldiers.archer + state.soldiers.knight
+  const soldiers = state.soldiers ?? { militia: 0, archer: 0, knight: 0 }
+  const totalSoldiers = soldiers.militia + soldiers.archer + soldiers.knight
 
   const selectedFloor = selected !== null ? DUNGEON_FLOORS[selected - 1] : null
 
@@ -75,7 +77,7 @@ export default function DungeonPanel({
                     敌人规模预估：<span className="text-stone-300">{estimateDungeonPower(selectedFloor.wave).min} ~ {estimateDungeonPower(selectedFloor.wave).max}</span>
                   </div>
                   <div className="text-xs text-stone-400">
-                    荣耀奖励：<span className="text-amber-300">🏅 {selectedFloor.honor}{state.skills.has('mi_honor') ? ' +1（军功授爵）' : ''}{state.skills.has('co_war_economy') ? ' +1（战争经济）' : ''}</span>
+                    荣耀奖励：<span className="text-amber-300">🏅 {selectedFloor.honor}{state.skills?.has('mi_honor') ? ' +1（军功授爵）' : ''}{state.skills?.has('co_war_economy') ? ' +1（战争经济）' : ''}</span>
                   </div>
                   <div className="text-xs text-stone-500 leading-relaxed">
                     {selectedFloor.floor <= 3

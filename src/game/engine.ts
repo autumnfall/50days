@@ -1043,14 +1043,19 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
 
 export function enterDungeon(s: GameState, floor: number): GameState {
   if (s.phase !== 'playing') return s
-  if (s.dungeon.dailyAttempted) return s
+  if (!s.dungeon || s.dungeon.dailyAttempted) return s
   if (floor < 1 || floor > 10) return s
-  if (floor > s.dungeon.highestCleared + 1) return s
-  const totalSoldiers = s.soldiers.militia + s.soldiers.archer + s.soldiers.knight
+  if (floor > (s.dungeon.highestCleared ?? 0) + 1) return s
+  const totalSoldiers = (s.soldiers?.militia ?? 0) + (s.soldiers?.archer ?? 0) + (s.soldiers?.knight ?? 0)
   if (totalSoldiers <= 0) return s
 
-  const { state, result } = resolveDungeonBattle(s, floor)
-  return { ...state, phase: 'dungeon_result', dungeon: { ...state.dungeon, pendingResult: result } }
+  try {
+    const { state, result } = resolveDungeonBattle(s, floor)
+    return { ...state, phase: 'dungeon_result', dungeon: { ...state.dungeon, pendingResult: result } }
+  } catch (e) {
+    console.error('地牢战斗错误:', e)
+    return { ...s, log: [...s.log, { day: s.day, text: `⚠️ 地牢异常：${e instanceof Error ? e.message : '未知错误'}`, kind: 'bad' as const }] }
+  }
 }
 
 export function closeDungeonResult(s: GameState): GameState {

@@ -126,7 +126,7 @@ export default function Game() {
       {state.phase === 'battle' && state.battle && (
         <BattleModal report={state.battle} onClose={onCloseBattle} />
       )}
-      {state.phase === 'dungeon_result' && state.dungeon.pendingResult && (
+      {state.phase === 'dungeon_result' && state.dungeon?.pendingResult && (
         <DungeonResultModal result={state.dungeon.pendingResult} onClose={onCloseDungeonResult} />
       )}
       {state.phase === 'playing' && state.pendingEvent && (
