@@ -27,6 +27,7 @@ function deserialize(json: string): GameState | null {
   try {
     const parsed = JSON.parse(json)
     if (!parsed || typeof parsed.day !== 'number' || !parsed.resources || !parsed.phase) return null
+    if (!parsed.dungeon) parsed.dungeon = { highestCleared: 0, dailyAttempted: false, pendingResult: null }
     return { ...parsed, skills: new Set<string>(parsed.skills ?? []) }
   } catch {
     return null

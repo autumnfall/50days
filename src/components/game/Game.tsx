@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  applyEventChoice, assign, build, buyUpgrade, chooseNation, closeBattleReport, createGame, endTurn,
-  exchangeForHonor, recruit, recruitMax, train, unlockSkill, waveChanceTomorrow,
+  applyEventChoice, assign, build, buyUpgrade, chooseNation, closeBattleReport, closeDungeonResult, createGame, endTurn,
+  enterDungeon, exchangeForHonor, recruit, recruitMax, train, unlockSkill, waveChanceTomorrow,
   type GameState,
 } from '@/game/engine'
 import { CONFIG, NATIONS, type BuildingId, type NationId, type ResourceId, type UnitId, type UpgradeId } from '@/game/config'
@@ -16,6 +16,8 @@ import BuildPanel from './BuildPanel'
 import ArmyPanel from './ArmyPanel'
 import LogPanel from './LogPanel'
 import BattleModal from './BattleModal'
+import DungeonPanel from './DungeonPanel'
+import DungeonResultModal from './DungeonResultModal'
 import EndScreen from './EndScreen'
 import SkillTree from './SkillTree'
 import EventModal from './EventModal'
@@ -55,6 +57,8 @@ export default function Game() {
   const onBuyUpgrade = useCallback((id: UpgradeId) => setState((s) => buyUpgrade(s, id)), [])
   const onExchange = useCallback((res: ResourceId) => setState((s) => exchangeForHonor(s, res)), [])
   const onChooseEvent = useCallback((choiceId: string) => setState((s) => applyEventChoice(s, choiceId)), [])
+  const onEnterDungeon = useCallback((floor: number) => setState((s) => enterDungeon(s, floor)), [])
+  const onCloseDungeonResult = useCallback(() => setState((s) => closeDungeonResult(s)), [])
 
   const onSave = useCallback((slot: number) => { setState((s) => { saveGame(s, slot); return s }); refreshMeta() }, [refreshMeta])
   const onLoad = useCallback((slot: number) => { const loaded = loadGame(slot); if (loaded) setState(loaded) }, [])
@@ -86,7 +90,7 @@ export default function Game() {
           <ArmyPanel state={state} onTrain={onTrain} />
         </div>
 
-        {/* 中栏：村庄视图 + 结束回合 + 日志 */}
+        {/* 中栏：村庄视图 + 结束回合 + 地牢 + 日志 */}
         <div className="flex flex-col gap-4">
           <VillageView state={state} />
           <button
@@ -101,6 +105,7 @@ export default function Game() {
                 : `结算采集与消耗，进入第 ${state.day + 1} 天${waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`}
             </span>
           </button>
+          <DungeonPanel state={state} onEnter={onEnterDungeon} />
           <LogPanel state={state} />
         </div>
 
@@ -120,6 +125,9 @@ export default function Game() {
 
       {state.phase === 'battle' && state.battle && (
         <BattleModal report={state.battle} onClose={onCloseBattle} />
+      )}
+      {state.phase === 'dungeon_result' && state.dungeon.pendingResult && (
+        <DungeonResultModal result={state.dungeon.pendingResult} onClose={onCloseDungeonResult} />
       )}
       {state.phase === 'playing' && state.pendingEvent && (
         <EventModal state={state} event={state.pendingEvent.event} onChoose={onChooseEvent} />

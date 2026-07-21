@@ -7,8 +7,9 @@ import {
   getWave, pickRandomEvent, scaleEvent,
   type BuildingId, type GameEvent, type NationId, type ResourceId, type UnitId, type UpgradeId, type WaveInfo,
 } from './config'
+import { resolveDungeonBattle, type DungeonResult } from './dungeon'
 
-export type Phase = 'start' | 'playing' | 'battle' | 'victory' | 'defeat'
+export type Phase = 'start' | 'playing' | 'battle' | 'dungeon_result' | 'victory' | 'defeat'
 
 export interface LogEntry {
   day: number
@@ -78,6 +79,12 @@ export interface GameState {
   lastWaveDay: number
   /** 是否已击败终局 Boss */
   defeatedFinalBoss: boolean
+  /** 地牢探险状态 */
+  dungeon: {
+    highestCleared: number
+    dailyAttempted: boolean
+    pendingResult: DungeonResult | null
+  }
 }
 
 // ---------------- 初始化 ----------------
@@ -105,6 +112,7 @@ export function createGame(): GameState {
     wavesFaced: 0,
     lastWaveDay: 2,
     defeatedFinalBoss: false,
+    dungeon: { highestCleared: 0, dailyAttempted: false, pendingResult: null },
   }
 }
 
@@ -470,7 +478,7 @@ export function recruitMax(s: GameState): GameState {
 
 export function endTurn(s: GameState): GameState {
   if (s.phase !== 'playing') return s
-  let ns: GameState = { ...s, resources: { ...s.resources }, log: [...s.log] }
+  let ns: GameState = { ...s, resources: { ...s.resources }, log: [...s.log], dungeon: { ...s.dungeon, dailyAttempted: false, pendingResult: null } }
 
   // 1. 资源采集（含国家/技能加成）
   const farmBonus = CONFIG.farmBonus * (hasSkill(ns, 'ag_fertility') ? 2 : 1)
@@ -846,6 +854,25 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
   }
 
   return { ...ns, battle: report, phase: 'battle' }
+}
+
+// ---------------- 地牢 ----------------
+
+export function enterDungeon(s: GameState, floor: number): GameState {
+  if (s.phase !== 'playing') return s
+  if (s.dungeon.dailyAttempted) return s
+  if (floor < 1 || floor > 10) return s
+  if (floor > s.dungeon.highestCleared + 1) return s
+  const totalSoldiers = s.soldiers.militia + s.soldiers.archer + s.soldiers.knight
+  if (totalSoldiers <= 0) return s
+
+  const { state, result } = resolveDungeonBattle(s, floor)
+  return { ...state, phase: 'dungeon_result', dungeon: { ...state.dungeon, pendingResult: result } }
+}
+
+export function closeDungeonResult(s: GameState): GameState {
+  if (s.phase !== 'dungeon_result') return s
+  return { ...s, phase: 'playing', dungeon: { ...s.dungeon, pendingResult: null } }
 }
 
 export function closeBattleReport(s: GameState): GameState {
