@@ -24,6 +24,12 @@ export interface BattleRound {
   enemiesLeft: number
   playerLeft: number // 我方剩余战斗单位数（士兵）
   note?: string
+  /** 各兵种本回合造成的伤害（地牢用） */
+  playerDmgByType?: Partial<Record<UnitId, number>>
+  /** 各兵种本回合击杀数（地牢用） */
+  playerKillsByType?: Partial<Record<UnitId, number>>
+  /** 各兵种本回合阵亡数（地牢用，英魂庇护前） */
+  playerLostByType?: Partial<Record<UnitId, number>>
 }
 
 export interface BattleReport {
@@ -599,6 +605,59 @@ export function endTurn(s: GameState): GameState {
   return ns
 }
 
+// ---------------- 收入预览 ----------------
+
+export interface TurnPreview {
+  food: number
+  wood: number
+  gold: number
+  detail: {
+    foodGather: number
+    woodGather: number
+    goldGather: number
+    interest: number
+    upkeep: number
+    starved: number
+  }
+}
+
+export function previewTurnIncome(s: GameState): TurnPreview {
+  const farmBonus = CONFIG.farmBonus * (hasSkill(s, 'ag_fertility') ? 2 : 1)
+  const foodPer = CONFIG.foodGatherBase + s.buildings.farm * farmBonus
+    + (s.nation === 'agriculture' ? 1 : 0) + (hasSkill(s, 'ag_irrigate') ? 1 : 0)
+  const woodPer = CONFIG.gatherBase + s.buildings.lumber
+  const goldPer = CONFIG.gatherBase + s.buildings.mine
+    + (s.nation === 'commerce' ? 1 : 0) + (hasSkill(s, 'co_market') ? 1 : 0)
+
+  let foodGather = s.assignment.food * foodPer
+  let woodGather = s.assignment.wood * woodPer
+  let goldGather = s.assignment.gold * goldPer
+  if (hasSkill(s, 'ag_abundance')) foodGather = Math.floor(foodGather * 1.25)
+  if (hasSkill(s, 'co_tariff')) goldGather = Math.floor(goldGather * 1.2)
+
+  const goldAfterGather = s.resources.gold + goldGather
+  const interestRate = hasSkill(s, 'co_goldwater') ? 0.05 : hasSkill(s, 'co_caravan') ? 0.02 : 0
+  const interest = interestRate > 0 && goldAfterGather > 0 ? Math.floor(goldAfterGather * interestRate) : 0
+
+  const upkeep = foodUpkeep(s)
+  const foodAfter = s.resources.food + foodGather - upkeep
+
+  let starved = 0
+  if (foodAfter < 0) {
+    let deficit = Math.ceil(-foodAfter / CONFIG.starveRatio)
+    if (hasSkill(s, 'ag_granary') && deficit > 0) deficit -= 1
+    if (hasSkill(s, 'ag_population') && deficit > 0) deficit -= 1
+    if (deficit > 0) starved = Math.min(deficit, population(s))
+  }
+
+  return {
+    food: foodGather - upkeep - starved * CONFIG.starveRatio,
+    wood: woodGather,
+    gold: goldGather + interest,
+    detail: { foodGather, woodGather, goldGather, interest, upkeep, starved },
+  }
+}
+
 /** 玩家对挂起事件做出抉择 */
 export function applyEventChoice(s: GameState, choiceId: string): GameState {
   if (!s.pendingEvent) return s
@@ -622,11 +681,9 @@ export function applyEventChoice(s: GameState, choiceId: string): GameState {
       ns.resources[r] = Math.max(0, ns.resources[r] + v)
     }
   }
-  // 村民增减（受住房上限约束）
+  // 村民增减（允许超过人口上限，仅招募受限制）
   if (e.villagers) {
-    const target = ns.villagers + e.villagers
-    ns.villagers = e.villagers > 0 ? Math.min(popCap(ns) - soldierCount(ns), target) : Math.max(0, target)
-    ns.villagers = Math.max(0, ns.villagers)
+    ns.villagers = Math.max(0, ns.villagers + e.villagers)
     ns.assignment = fixAssignment(ns)
   }
   // 士兵增减
@@ -933,35 +990,53 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
     for (let round = 1; round <= 30; round++) {
       if (!enemies.length || !units.length) break
 
-      let playerDmg = units.reduce((sum, u) => sum + u.atk, 0) + bloodlustStacks
-      if (militiaAll) playerDmg += s.villagers * 2
-      playerDmg = Math.round(playerDmg * (0.9 + Math.random() * 0.2))
+      // ---- 我方各兵种伤害统计 ----
+      const unitDmgByType: Partial<Record<UnitId, number>> = {}
+      for (const u of units) unitDmgByType[u.id] = (unitDmgByType[u.id] ?? 0) + u.atk
+      if (militiaAll) unitDmgByType.militia = (unitDmgByType.militia ?? 0) + s.villagers * 2
+      let playerDmg = Object.values(unitDmgByType).reduce((a, b) => a + b!, 0) + bloodlustStacks
+      const rngMult = 0.9 + Math.random() * 0.2
+      playerDmg = Math.round(playerDmg * rngMult)
       if (round === 1) playerDmg = Math.round(playerDmg * firstRoundBonus)
       if (hasChaos && round === 1) playerDmg = Math.round(playerDmg * 0.5)
+      // 按比例缩放各兵种伤害
+      const rawTotal = Object.values(unitDmgByType).reduce((a, b) => a + b!, 0)
+      if (rawTotal > 0) {
+        const scale = (playerDmg - bloodlustStacks) / rawTotal
+        for (const k of Object.keys(unitDmgByType) as UnitId[]) unitDmgByType[k] = Math.round(unitDmgByType[k]! * scale)
+      }
 
-      let enemyFrenzyMult = 1
-      if (hasFrenzy) enemyFrenzyMult = 1 + kills * 0.05
-
-      let enemyDmg = enemies.reduce((sum, e) => sum + e.atk, 0) * enemyFrenzyMult
-      enemyDmg = Math.round(enemyDmg * (0.9 + Math.random() * 0.2) * (discipline ? 0.9 : 1))
-
+      // ---- 击杀敌人 ----
+      const unitKillsByType: Partial<Record<UnitId, number>> = {}
       let dmg = playerDmg
-      const before = enemies.length
       while (dmg > 0 && enemies.length) {
         const idx = Math.floor(Math.random() * enemies.length)
         const e = enemies[idx]
         const dealt = Math.min(dmg, e.hp)
         e.hp -= dealt
         dmg -= dealt
-        if (e.hp <= 0) enemies.splice(idx, 1)
+        if (e.hp <= 0) {
+          enemies.splice(idx, 1)
+          // 击杀归属：按剩余伤害贡献概率分配
+          const contributors = (Object.keys(unitDmgByType) as UnitId[]).filter((k) => (unitDmgByType[k] ?? 0) > 0)
+          if (contributors.length > 0) {
+            const totalContrib = contributors.reduce((a, k) => a + unitDmgByType[k]!, 0)
+            let roll = Math.random() * totalContrib
+            for (const k of contributors) {
+              roll -= unitDmgByType[k]!
+              if (roll <= 0) { unitKillsByType[k] = (unitKillsByType[k] ?? 0) + 1; break }
+            }
+          }
+        }
       }
-      const roundKills = before - enemies.length
+      const roundKills = Object.values(unitKillsByType).reduce((a, b) => a + b!, 0)
       kills += roundKills
       if (bloodlust) {
         const newStacks = Math.floor(kills / 3)
         if (newStacks > bloodlustStacks) bloodlustStacks = newStacks
       }
 
+      // ---- 荆棘反伤 ----
       let thornNote: string | undefined
       if (hasThorns) {
         const thorn = Math.round(playerDmg * 0.15)
@@ -976,6 +1051,14 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
         }
       }
 
+      // ---- 敌方伤害 ----
+      let enemyFrenzyMult = 1
+      if (hasFrenzy) enemyFrenzyMult = 1 + kills * 0.05
+      let enemyDmg = enemies.reduce((sum, e) => sum + e.atk, 0) * enemyFrenzyMult
+      enemyDmg = Math.round(enemyDmg * (0.9 + Math.random() * 0.2) * (discipline ? 0.9 : 1))
+
+      // ---- 我方伤亡统计（英魂庇护前） ----
+      const beforeUnits = units.map((u) => ({ ...u }))
       dmg = enemyDmg
       while (dmg > 0 && units.length) {
         const idx = Math.floor(Math.random() * units.length)
@@ -985,6 +1068,15 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
         dmg -= dealt
         if (u.hp <= 0) units.splice(idx, 1)
       }
+      const playerLostByType: Partial<Record<UnitId, number>> = {}
+      const beforeCounts: Record<string, number> = {}
+      for (const u of beforeUnits) beforeCounts[u.id] = (beforeCounts[u.id] ?? 0) + 1
+      const afterCounts: Record<string, number> = {}
+      for (const u of units) afterCounts[u.id] = (afterCounts[u.id] ?? 0) + 1
+      for (const id of ['militia', 'archer', 'knight'] as UnitId[]) {
+        const lost = (beforeCounts[id] ?? 0) - (afterCounts[id] ?? 0)
+        if (lost > 0) playerLostByType[id] = lost
+      }
 
       report.rounds.push({
         round,
@@ -993,6 +1085,9 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
         enemiesLeft: enemies.length,
         playerLeft: units.length,
         note: thornNote ?? (bloodlust && roundKills > 0 && bloodlustStacks > 0 ? `🔥 嗜血 +${bloodlustStacks}` : undefined),
+        playerDmgByType: unitDmgByType,
+        playerKillsByType: unitKillsByType,
+        playerLostByType,
       })
     }
   }
@@ -1038,7 +1133,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
     }
   }
 
-  return { state: ns, result }
+  return { state: ns, result: report }
 }
 
 export function enterDungeon(s: GameState, floor: number): GameState {

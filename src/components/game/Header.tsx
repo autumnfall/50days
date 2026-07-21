@@ -1,5 +1,5 @@
 import { CONFIG, NATIONS, RESOURCE_INFO, type ResourceId } from '@/game/config'
-import { armyPower, finalBossWave, foodUpkeep, nextWave, popCap, population, soldierCount, waveChanceTomorrow, wavePower, type GameState } from '@/game/engine'
+import { armyPower, finalBossWave, foodUpkeep, nextWave, popCap, population, previewTurnIncome, soldierCount, waveChanceTomorrow, wavePower, type GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
 
 export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
@@ -15,6 +15,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
   const danger = myPower < enemyPower
   const boss = finalBossWave()
   const bossPower = wavePower(boss)
+  const preview = state.phase === 'playing' ? previewTurnIncome(state) : null
 
   return (
     <header className="sticky top-0 z-20 border-b border-stone-700/60 bg-stone-950/90 backdrop-blur-md">
@@ -43,14 +44,32 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
 
         {/* 资源 */}
         <div className="flex items-center gap-2.5" data-tutorial="resources">
-          {(Object.keys(RESOURCE_INFO) as ResourceId[]).map((r) => (
-            <div key={r} className="flex items-center gap-1 rounded-lg bg-stone-800/80 px-2.5 py-1" title={RESOURCE_INFO[r].name}>
-              <span>{RESOURCE_INFO[r].icon}</span>
-              <span className={cn('font-bold tabular-nums', RESOURCE_INFO[r].color, r === 'food' && state.resources.food < foodUpkeep(state) && 'animate-pulse text-red-400')}>
-                {Math.floor(state.resources[r])}
-              </span>
-            </div>
-          ))}
+          {(Object.keys(RESOURCE_INFO) as ResourceId[]).map((r) => {
+            const delta = preview ? (r === 'food' ? preview.food : r === 'wood' ? preview.wood : preview.gold) : 0
+            const d = preview?.detail
+            const tooltip = d
+              ? r === 'food'
+                ? `采集 +${d.foodGather}  消耗 -${d.upkeep}${d.starved > 0 ? `  饥荒死 ${d.starved} 人` : ''}`
+                : r === 'wood'
+                  ? `采集 +${d.woodGather}`
+                  : `采集 +${d.goldGather}${d.interest > 0 ? `  利息 +${d.interest}` : ''}`
+              : RESOURCE_INFO[r].name
+            return (
+              <div key={r} className="relative group flex flex-col items-center rounded-lg bg-stone-800/80 px-2.5 py-1" title={tooltip}>
+                <div className="flex items-center gap-1">
+                  <span>{RESOURCE_INFO[r].icon}</span>
+                  <span className={cn('font-bold tabular-nums', RESOURCE_INFO[r].color, r === 'food' && state.resources.food < foodUpkeep(state) && 'animate-pulse text-red-400')}>
+                    {Math.floor(state.resources[r])}
+                  </span>
+                </div>
+                {preview && delta !== 0 && (
+                  <span className={cn('text-[10px] tabular-nums font-medium', delta > 0 ? 'text-emerald-400' : 'text-red-400')}>
+                    {delta > 0 ? '+' : ''}{delta}
+                  </span>
+                )}
+              </div>
+            )
+          })}
           <div className="flex items-center gap-1 rounded-lg bg-amber-900/50 px-2.5 py-1" title="荣耀点（战斗缴获，用于解锁技能）">
             <span>🏅</span>
             <span className="font-bold tabular-nums text-amber-300">{state.honor}</span>
