@@ -88,13 +88,13 @@ export interface PowerEstimate {
   max: number
 }
 
-/** 预估敌人战力区间（模糊显示，不暴露精确数值） */
+/** 预估敌人战力区间（基于DPS，模糊显示±20%） */
 export function estimateDungeonPower(wave: number): PowerEstimate {
   const w = getWave(wave)
-  const base = Math.round(w.count * w.hpEach * w.atkEach / 10)
+  const base = Math.round(w.count * w.atkEach)
   return {
     min: Math.round(base * 0.8),
-    max: Math.round(base * 1.4),
+    max: Math.round(base * 1.2),
   }
 }
 
