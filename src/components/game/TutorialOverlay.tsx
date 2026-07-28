@@ -21,8 +21,12 @@ export default function TutorialOverlay({
 
   const updatePos = () => {
     if (!current.target) { setTargetPos(null); return }
-    const el = document.querySelector(current.target)
+    // 桌面/移动双布局下同一 data-tutorial 可能出现多次，取第一个可见元素
+    const els = document.querySelectorAll(current.target)
+    const el = [...els].find((e) => e.getClientRects().length > 0)
     if (!el) { setTargetPos(null); return }
+    // 目标可能不在可视区内（移动端长页面），先滚动到中间再定位
+    el.scrollIntoView({ block: 'center' })
     const r = el.getBoundingClientRect()
     setTargetPos({ top: r.top, left: r.left, width: r.width, height: r.height })
   }
@@ -41,11 +45,21 @@ export default function TutorialOverlay({
   const tooltipStyle: React.CSSProperties = isCentered
     ? {}
     : (() => {
-        const p = current.placement ?? 'bottom'
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        const isMobile = vw < 1024
+        let p = current.placement ?? 'bottom'
+        // 窄屏上左/右放置必然溢出：按目标在屏幕的上/下半部改为下方/上方
+        if (isMobile && (p === 'left' || p === 'right')) {
+          p = targetPos!.top + targetPos!.height / 2 < vh / 2 ? 'bottom' : 'top'
+        }
         const gap = 12
+        // 水平方向钳制在屏幕内（卡片宽 340，预留两侧各 8px）
+        const centerX = targetPos!.left + targetPos!.width / 2
+        const clampedX = Math.min(Math.max(centerX, 176), Math.max(176, vw - 176))
         switch (p) {
-          case 'bottom': return { top: targetPos!.top + targetPos!.height + gap, left: targetPos!.left + targetPos!.width / 2, transform: 'translateX(-50%)' }
-          case 'top': return { top: targetPos!.top - gap, left: targetPos!.left + targetPos!.width / 2, transform: 'translate(-50%, -100%)' }
+          case 'bottom': return { top: targetPos!.top + targetPos!.height + gap, left: clampedX, transform: 'translateX(-50%)' }
+          case 'top': return { top: targetPos!.top - gap, left: clampedX, transform: 'translate(-50%, -100%)' }
           case 'right': return { top: targetPos!.top + targetPos!.height / 2, left: targetPos!.left + targetPos!.width + gap, transform: 'translateY(-50%)' }
           case 'left': return { top: targetPos!.top + targetPos!.height / 2, left: targetPos!.left - gap, transform: 'translate(-100%, -50%)' }
         }

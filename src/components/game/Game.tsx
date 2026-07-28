@@ -37,6 +37,14 @@ const MOBILE_TABS: { id: MobileTab; icon: string; label: string }[] = [
   { id: 'skill', icon: '✨', label: '技能' },
 ]
 
+/** 教程步骤 → 移动端需要切换到的 Tab（面板只在对应 Tab 激活时渲染） */
+const TUTORIAL_STEP_TAB: Partial<Record<string, MobileTab>> = {
+  assignment: 'people',
+  army: 'army',
+  build: 'build',
+  'skill-tree': 'skill',
+}
+
 /** 结束回合按钮（桌面/移动共用） */
 function EndTurnButton({ state, onEndTurn, className }: { state: GameState; onEndTurn: () => void; className?: string }) {
   return (
@@ -65,6 +73,7 @@ export default function Game() {
   const [saveMeta, setSaveMeta] = useState<(SaveMetadata | null)[]>(() => getAllSaveMetadata())
   const [tutorialStep, setTutorialStep] = useState<number | null>(null)
   const [showHelp, setShowHelp] = useState(false)
+  const [mobileTab, setMobileTab] = useState<MobileTab>('village')
   const [settleInfo, setSettleInfo] = useState<SettleResult | null>(null)
   const settledForRef = useRef<GameState | null>(null)
 
@@ -89,6 +98,15 @@ export default function Game() {
 
   const refreshMeta = useCallback(() => setSaveMeta(getAllSaveMetadata()), [])
 
+  /** 切换教程步骤，并联动移动端 Tab 确保目标面板已渲染（与步骤状态同批次更新） */
+  const gotoTutorialStep = useCallback((n: number | null) => {
+    setTutorialStep(n)
+    if (n !== null) {
+      const tab = TUTORIAL_STEP_TAB[TUTORIAL_STEPS[n].id]
+      if (tab) setMobileTab(tab)
+    }
+  }, [])
+
   const onStart = useCallback((nation: NationId, talents: string[]) => setState(chooseNation(createGame(talents), nation)), [])
   const onRestart = useCallback(() => { settledForRef.current = null; setSettleInfo(null); setState(createGame()) }, [])
   const onAssign = useCallback((res: ResourceId, delta: number) => setState((s) => assign(s, res, delta)), [])
@@ -110,18 +128,16 @@ export default function Game() {
   const onDelete = useCallback((slot: number) => { deleteSave(slot); refreshMeta() }, [refreshMeta])
   const onOpenSaveLoad = useCallback((mode: 'save' | 'load') => { refreshMeta(); setSaveLoadMode(mode); setSaveLoadOpen(true) }, [refreshMeta])
 
-  const onTutorial = useCallback(() => setTutorialStep(0), [])
+  const onTutorial = useCallback(() => gotoTutorialStep(0), [gotoTutorialStep])
   const onHelp = useCallback(() => setShowHelp(true), [])
   const tutorialNext = useCallback(() => {
-    setTutorialStep((s) => {
-      if (s === null || s >= TUTORIAL_STEPS.length - 1) { markTutorialCompleted(); return null }
-      return s + 1
-    })
-  }, [])
-  const tutorialPrev = useCallback(() => { setTutorialStep((s) => (s !== null && s > 0 ? s - 1 : s)) }, [])
-  const tutorialSkip = useCallback(() => { markTutorialCompleted(); setTutorialStep(null) }, [])
-
-  const [mobileTab, setMobileTab] = useState<MobileTab>('village')
+    const done = tutorialStep === null || tutorialStep >= TUTORIAL_STEPS.length - 1
+    if (done) { markTutorialCompleted(); gotoTutorialStep(null) } else { gotoTutorialStep(tutorialStep + 1) }
+  }, [tutorialStep, gotoTutorialStep])
+  const tutorialPrev = useCallback(() => {
+    if (tutorialStep !== null && tutorialStep > 0) gotoTutorialStep(tutorialStep - 1)
+  }, [tutorialStep, gotoTutorialStep])
+  const tutorialSkip = useCallback(() => { markTutorialCompleted(); gotoTutorialStep(null) }, [gotoTutorialStep])
 
   if (state.phase === 'start') return <StartScreen onStart={onStart} onLoad={onLoad} />
   if (state.phase === 'victory' || state.phase === 'defeat') return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onLoad={onLoad} />
