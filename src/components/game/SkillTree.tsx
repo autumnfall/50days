@@ -108,7 +108,7 @@ export default function SkillTree({
                     {def.name}
                     <span className="text-[10px] font-medium text-purple-300">Lv{lv}</span>
                   </div>
-                  <div className="truncate text-[9px] text-stone-500">{def.desc}</div>
+                  <div className="text-[9px] leading-tight text-stone-500">{def.desc}</div>
                 </div>
                 <span className={cn('shrink-0 text-[10px] font-bold', state.honor >= cost ? 'text-amber-300' : 'text-stone-500')}>
                   🏅{cost}

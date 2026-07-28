@@ -35,7 +35,7 @@ export default function BattleModal({ report, onClose }: { report: BattleReport;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
       <div className={cn(
-        'w-full max-w-lg overflow-hidden rounded-2xl border shadow-2xl transition-colors',
+        'w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border shadow-2xl transition-colors',
         done ? (report.won ? 'border-amber-500/70' : 'border-red-600/70') : 'border-stone-600',
         'bg-stone-900',
       )}>

@@ -62,7 +62,7 @@ export default function ArmyPanel({
                     攻 {unitAtk(state, id)} · 血 {unitHp(state, id)}
                   </span>
                 </div>
-                <div className="truncate text-[11px] text-stone-500">
+                <div className="text-[11px] leading-snug text-stone-500">
                   {unique
                     ? '✦ 战神已化身，全局唯一'
                     : locked

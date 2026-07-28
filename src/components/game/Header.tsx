@@ -19,7 +19,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
 
   return (
     <header className="sticky top-0 z-20 border-b border-stone-700/60 bg-stone-950/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 sm:gap-x-5 sm:gap-y-2 sm:px-4 sm:py-3">
         <div className="flex items-center gap-2">
           <span className="text-2xl">{state.nation ? NATIONS[state.nation].icon : '🏰'}</span>
           <div className="hidden sm:block">
@@ -29,7 +29,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         </div>
 
         {/* 天数进度 */}
-        <div className="min-w-40 flex-1 sm:max-w-60">
+        <div className="min-w-32 flex-1 sm:max-w-60">
           <div className="flex items-center justify-between text-xs text-stone-400">
             <span>第 <b className="text-base text-amber-300">{Math.min(state.day, CONFIG.totalDays)}</b> / {CONFIG.totalDays} 天</span>
             <span>{Math.round((Math.min(state.day, CONFIG.totalDays) / CONFIG.totalDays) * 100)}%</span>
@@ -55,7 +55,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
                   : `采集 +${d.goldGather}${d.interest > 0 ? `  利息 +${d.interest}` : ''}`
               : RESOURCE_INFO[r].name
             return (
-              <div key={r} className="relative group flex flex-col items-center rounded-lg bg-stone-800/80 px-2.5 py-1" title={tooltip}>
+              <div key={r} className="relative group flex flex-col items-center rounded-lg bg-stone-800/80 px-2 py-0.5 sm:px-2.5 sm:py-1" title={tooltip}>
                 <div className="flex items-center gap-1">
                   <span>{RESOURCE_INFO[r].icon}</span>
                   <span className={cn('font-bold tabular-nums', RESOURCE_INFO[r].color, r === 'food' && state.resources.food < foodUpkeep(state) && 'animate-pulse text-red-400')}>
@@ -85,7 +85,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         {/* 波次预警 */}
         <div data-tutorial="wave-warning"
           className={cn(
-            'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs',
+            'flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs sm:gap-2 sm:px-3 sm:py-1.5',
             chance >= 1
               ? 'animate-pulse border-red-500/60 bg-red-950/60 text-red-300'
               : chance >= 0.6 || danger

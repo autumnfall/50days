@@ -25,6 +25,38 @@ import EventModal from './EventModal'
 import SaveLoadModal from './SaveLoadModal'
 import TutorialOverlay from './TutorialOverlay'
 import { Panel } from './ui-bits'
+import { cn } from '@/lib/utils'
+
+type MobileTab = 'village' | 'people' | 'army' | 'build' | 'skill'
+
+const MOBILE_TABS: { id: MobileTab; icon: string; label: string }[] = [
+  { id: 'village', icon: '🏘️', label: '村庄' },
+  { id: 'people', icon: '👥', label: '村民' },
+  { id: 'army', icon: '🎖️', label: '军队' },
+  { id: 'build', icon: '🔨', label: '建造' },
+  { id: 'skill', icon: '✨', label: '技能' },
+]
+
+/** 结束回合按钮（桌面/移动共用） */
+function EndTurnButton({ state, onEndTurn, className }: { state: GameState; onEndTurn: () => void; className?: string }) {
+  return (
+    <button
+      onClick={onEndTurn}
+      data-tutorial="end-turn"
+      className={cn(
+        'group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 py-4 text-lg font-black tracking-[0.4em] text-stone-950 shadow-lg transition hover:from-amber-500 hover:to-amber-400 hover:shadow-amber-500/25 active:scale-[0.99]',
+        className,
+      )}
+    >
+      {state.day >= CONFIG.totalDays ? '⚔️ 迎接终局决战' : '结束回合 ⏭'}
+      <span className="block text-[11px] font-medium tracking-normal text-stone-800/80">
+        {state.day >= CONFIG.totalDays
+          ? '终局 Boss 即将来袭，做好最后的准备！'
+          : `结算采集与消耗，进入第 ${state.day + 1} 天${waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`}
+      </span>
+    </button>
+  )
+}
 
 export default function Game() {
   const [state, setState] = useState<GameState>(createGame)
@@ -89,6 +121,8 @@ export default function Game() {
   const tutorialPrev = useCallback(() => { setTutorialStep((s) => (s !== null && s > 0 ? s - 1 : s)) }, [])
   const tutorialSkip = useCallback(() => { markTutorialCompleted(); setTutorialStep(null) }, [])
 
+  const [mobileTab, setMobileTab] = useState<MobileTab>('village')
+
   if (state.phase === 'start') return <StartScreen onStart={onStart} onLoad={onLoad} />
   if (state.phase === 'victory' || state.phase === 'defeat') return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onLoad={onLoad} />
 
@@ -96,7 +130,8 @@ export default function Game() {
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-stone-950 text-stone-100">
       <Header state={state} onOpenSaveLoad={onOpenSaveLoad} onTutorial={onTutorial} onHelp={onHelp} />
 
-      <main className="mx-auto grid w-full max-w-7xl flex-1 gap-4 p-4 lg:grid-cols-[290px_1fr_330px]">
+      {/* ============ 桌面端：三栏布局（lg 起） ============ */}
+      <main className="mx-auto hidden w-full max-w-7xl flex-1 gap-4 p-4 lg:grid lg:grid-cols-[290px_1fr_330px]">
         {/* 左栏：村民 + 军队 */}
         <div className="flex flex-col gap-4">
           <AssignmentPanel state={state} onAssign={onAssign} />
@@ -106,18 +141,7 @@ export default function Game() {
         {/* 中栏：村庄视图 + 结束回合 + 地牢 + 日志 */}
         <div className="flex flex-col gap-4">
           <VillageView state={state} />
-          <button
-            onClick={onEndTurn}
-            data-tutorial="end-turn"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 py-4 text-lg font-black tracking-[0.4em] text-stone-950 shadow-lg transition hover:from-amber-500 hover:to-amber-400 hover:shadow-amber-500/25 active:scale-[0.99]"
-          >
-            {state.day >= CONFIG.totalDays ? '⚔️ 迎接终局决战' : '结束回合 ⏭'}
-            <span className="block text-[11px] font-medium tracking-normal text-stone-800/80">
-              {state.day >= CONFIG.totalDays
-                ? '终局 Boss 即将来袭，做好最后的准备！'
-                : `结算采集与消耗，进入第 ${state.day + 1} 天${waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`}
-            </span>
-          </button>
+          <EndTurnButton state={state} onEndTurn={onEndTurn} />
           <DungeonPanel state={state} onEnter={onEnterDungeon} />
           <LogPanel state={state} />
         </div>
@@ -135,6 +159,61 @@ export default function Game() {
           </Panel>
         </div>
       </main>
+
+      {/* ============ 移动端：底部 Tab 导航（lg 以下） ============ */}
+      <main className="mx-auto w-full max-w-xl flex-1 px-3 pb-40 pt-3 lg:hidden">
+        {mobileTab === 'village' && (
+          <div className="flex flex-col gap-3">
+            <VillageView state={state} />
+            <DungeonPanel state={state} onEnter={onEnterDungeon} />
+            <LogPanel state={state} />
+          </div>
+        )}
+        {mobileTab === 'people' && <AssignmentPanel state={state} onAssign={onAssign} />}
+        {mobileTab === 'army' && <ArmyPanel state={state} onTrain={onTrain} />}
+        {mobileTab === 'build' && (
+          <BuildPanel state={state} onBuild={onBuild} onRecruit={onRecruit} onRecruitMax={onRecruitMax} />
+        )}
+        {mobileTab === 'skill' && (
+          <Panel
+            title={`技能树 · ${state.nation ? NATIONS[state.nation].name : ''}`}
+            icon="✨"
+            data-tutorial="skill-tree"
+            extra={<span className="text-xs text-stone-400">荣耀 <b className="text-amber-300">🏅{state.honor}</b></span>}
+          >
+            <SkillTree state={state} onUnlock={onUnlock} onBuyUpgrade={onBuyUpgrade} onExchange={onExchange} />
+          </Panel>
+        )}
+      </main>
+
+      {/* 移动端固定底栏：常驻结束回合 + Tab 导航 */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-700/60 bg-stone-950/95 px-3 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur-md lg:hidden">
+        <EndTurnButton state={state} onEndTurn={onEndTurn} className="py-3 text-base" />
+        <nav className="mt-2 flex items-stretch justify-between gap-1 pb-1">
+          {MOBILE_TABS.map((tab) => {
+            const active = mobileTab === tab.id
+            const idleBadge = tab.id === 'people' ? state.villagers - state.assignment.food - state.assignment.wood - state.assignment.gold : 0
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setMobileTab(tab.id)}
+                className={cn(
+                  'relative flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 transition',
+                  active ? 'bg-amber-900/40 text-amber-200' : 'text-stone-400 hover:bg-stone-800/60 hover:text-stone-200',
+                )}
+              >
+                <span className="text-lg leading-none">{tab.icon}</span>
+                <span className="text-[10px] font-bold">{tab.label}</span>
+                {idleBadge > 0 && (
+                  <span className="absolute right-1.5 top-0.5 rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white">
+                    {idleBadge}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </nav>
+      </div>
 
       {state.phase === 'battle' && state.battle && (
         <BattleModal report={state.battle} onClose={onCloseBattle} />

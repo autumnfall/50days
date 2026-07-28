@@ -32,7 +32,7 @@ export default function EventModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className={cn('w-full max-w-md animate-[popIn_0.25s_ease-out] overflow-hidden rounded-2xl border bg-stone-900 shadow-2xl', theme.border)}>
+      <div className={cn('w-full max-w-md max-h-[92vh] overflow-y-auto animate-[popIn_0.25s_ease-out] rounded-2xl border bg-stone-900 shadow-2xl', theme.border)}>
         <div className={cn('px-6 py-5 text-center', theme.bg)}>
           <div className="text-5xl">{event.icon}</div>
           <h2 className={cn('mt-2 text-lg font-black tracking-widest', theme.title)}>{event.title}</h2>
