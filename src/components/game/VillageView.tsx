@@ -15,6 +15,7 @@ export default function VillageView({ state }: { state: GameState }) {
   const towers = '🗼'.repeat(Math.min(b.tower, 5))
 
   const army: string[] = []
+  for (let i = 0; i < Math.min(state.soldiers.warlord, 1); i++) army.push('🦾')
   for (let i = 0; i < Math.min(state.soldiers.knight, 10); i++) army.push('🐎')
   for (let i = 0; i < Math.min(state.soldiers.archer, 10); i++) army.push('🏹')
   for (let i = 0; i < Math.min(state.soldiers.militia, 10); i++) army.push('⚔️')

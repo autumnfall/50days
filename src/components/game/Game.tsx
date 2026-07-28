@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   applyEventChoice, assign, build, buyUpgrade, chooseNation, closeBattleReport, closeDungeonResult, createGame, endTurn,
   enterDungeon, exchangeForHonor, recruit, recruitMax, train, unlockSkill, waveChanceTomorrow,
@@ -6,6 +6,7 @@ import {
 } from '@/game/engine'
 import { CONFIG, NATIONS, type BuildingId, type NationId, type ResourceId, type UnitId, type UpgradeId } from '@/game/config'
 import { autoSave, deleteSave, getAllSaveMetadata, loadGame, saveGame, type SaveMetadata } from '@/game/save'
+import { loadMeta, saveMeta as saveMetaProgress, settleRun, type SettleResult } from '@/game/meta'
 import { isTutorialCompleted, markTutorialCompleted, TUTORIAL_STEPS } from '@/game/tutorial'
 import StartScreen from './StartScreen'
 import Header from './Header'
@@ -32,6 +33,18 @@ export default function Game() {
   const [saveMeta, setSaveMeta] = useState<(SaveMetadata | null)[]>(() => getAllSaveMetadata())
   const [tutorialStep, setTutorialStep] = useState<number | null>(null)
   const [showHelp, setShowHelp] = useState(false)
+  const [settleInfo, setSettleInfo] = useState<SettleResult | null>(null)
+  const settledForRef = useRef<GameState | null>(null)
+
+  // 局结束结算：传承点 + 生涯记录（每局只结算一次，ref 防 StrictMode 双写）
+  useEffect(() => {
+    if (state.phase !== 'victory' && state.phase !== 'defeat') return
+    if (settledForRef.current === state) return
+    settledForRef.current = state
+    const result = settleRun(state, loadMeta())
+    saveMetaProgress(result.meta)
+    setSettleInfo(result)
+  }, [state])
 
   // 自动弹出教程（首次进入 playing 阶段）
   const prevPhaseRef = useState(state.phase)
@@ -44,8 +57,8 @@ export default function Game() {
 
   const refreshMeta = useCallback(() => setSaveMeta(getAllSaveMetadata()), [])
 
-  const onStart = useCallback((nation: NationId) => setState(chooseNation(createGame(), nation)), [])
-  const onRestart = useCallback(() => setState(createGame()), [])
+  const onStart = useCallback((nation: NationId, talents: string[]) => setState(chooseNation(createGame(talents), nation)), [])
+  const onRestart = useCallback(() => { settledForRef.current = null; setSettleInfo(null); setState(createGame()) }, [])
   const onAssign = useCallback((res: ResourceId, delta: number) => setState((s) => assign(s, res, delta)), [])
   const onBuild = useCallback((id: BuildingId) => setState((s) => build(s, id)), [])
   const onTrain = useCallback((id: UnitId) => setState((s) => train(s, id)), [])
@@ -77,7 +90,7 @@ export default function Game() {
   const tutorialSkip = useCallback(() => { markTutorialCompleted(); setTutorialStep(null) }, [])
 
   if (state.phase === 'start') return <StartScreen onStart={onStart} onLoad={onLoad} />
-  if (state.phase === 'victory' || state.phase === 'defeat') return <EndScreen state={state} onRestart={onRestart} onLoad={onLoad} />
+  if (state.phase === 'victory' || state.phase === 'defeat') return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onLoad={onLoad} />
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-stone-950 text-stone-100">
@@ -143,7 +156,7 @@ export default function Game() {
         onLoad={onLoad}
         onDelete={onDelete}
       />
-      {tutorialStep !== null && state.phase === 'playing' && !state.pendingEvent && state.phase !== 'battle' && (
+      {tutorialStep !== null && state.phase === 'playing' && !state.pendingEvent && (
         <TutorialOverlay
           step={tutorialStep}
           onNext={tutorialNext}

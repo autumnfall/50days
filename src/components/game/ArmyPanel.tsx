@@ -3,7 +3,7 @@ import { armyPower, canAfford, soldierCount, trainCost, unitAtk, unitHp, type Ga
 import { cn } from '@/lib/utils'
 import { CostTag, Panel } from './ui-bits'
 
-const ORDER: UnitId[] = ['militia', 'archer', 'knight']
+const ORDER: UnitId[] = ['militia', 'archer', 'knight', 'warlord']
 
 export default function ArmyPanel({
   state,
@@ -29,9 +29,10 @@ export default function ArmyPanel({
           const def = UNITS[id]
           const n = state.soldiers[id]
           const locked = state.buildings.barracks < def.reqBarracks
+          const unique = id === 'warlord' && n >= 1 // 战神全局唯一
           const cost = trainCost(state, id)
           const affordable = canAfford(state, cost)
-          const disabled = locked || !affordable || state.villagers < 1
+          const disabled = locked || unique || !affordable || state.villagers < 1
           return (
             <button
               key={id}
@@ -39,7 +40,7 @@ export default function ArmyPanel({
               disabled={disabled}
               className={cn(
                 'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition',
-                locked
+                locked || unique
                   ? 'cursor-not-allowed border-stone-800 bg-stone-950/40 opacity-50'
                   : disabled
                     ? 'cursor-not-allowed border-stone-800 bg-stone-950/40 opacity-70'
@@ -62,10 +63,16 @@ export default function ArmyPanel({
                   </span>
                 </div>
                 <div className="truncate text-[11px] text-stone-500">
-                  {locked ? `🔒 需要兵营 Lv${def.reqBarracks}` : '由 1 名村民转职（人口 1:1 转化）'}
+                  {unique
+                    ? '✦ 战神已化身，全局唯一'
+                    : locked
+                      ? `🔒 需要兵营 Lv${def.reqBarracks}${id === 'warlord' ? '（局外天赋「战神」解锁）' : ''}`
+                      : id === 'warlord'
+                        ? '属性 = 民兵+弓手+骑士各 1 名的生效属性之和'
+                        : '由 1 名村民转职（人口 1:1 转化）'}
                 </div>
               </div>
-              {!locked && <CostTag cost={cost} resources={state.resources} />}
+              {!locked && !unique && <CostTag cost={cost} resources={state.resources} />}
             </button>
           )
         })}

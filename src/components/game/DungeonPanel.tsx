@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DUNGEON_FLOORS, estimateDungeonPower, type DungeonFloor } from '@/game/dungeon'
+import { DUNGEON_FLOORS, estimateDungeonPower } from '@/game/dungeon'
 import type { GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
 import { Panel } from './ui-bits'
@@ -15,8 +15,8 @@ export default function DungeonPanel({
   const dungeon = state.dungeon ?? { highestCleared: 0, dailyAttempted: false, pendingResult: null }
   const { highestCleared, dailyAttempted } = dungeon
   const nextFloor = highestCleared + 1
-  const soldiers = state.soldiers ?? { militia: 0, archer: 0, knight: 0 }
-  const totalSoldiers = soldiers.militia + soldiers.archer + soldiers.knight
+  const soldiers = state.soldiers
+  const totalSoldiers = soldiers.militia + soldiers.archer + soldiers.knight + soldiers.warlord
 
   const selectedFloor = selected !== null ? DUNGEON_FLOORS[selected - 1] : null
 

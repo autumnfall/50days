@@ -5,9 +5,10 @@ const UNIT_INFO: Record<UnitId, { name: string; icon: string }> = {
   militia: { name: '民兵', icon: '⚔️' },
   archer: { name: '弓箭手', icon: '🏹' },
   knight: { name: '骑士', icon: '🐎' },
+  warlord: { name: '战神', icon: '🦾' },
 }
 
-const UNIT_ORDER: UnitId[] = ['knight', 'archer', 'militia']
+const UNIT_ORDER: UnitId[] = ['warlord', 'knight', 'archer', 'militia']
 
 function UnitDmgBar({ type, dmg, kills, lost }: { type: UnitId; dmg: number; kills: number; lost: number }) {
   const info = UNIT_INFO[type]
@@ -60,7 +61,6 @@ export default function DungeonResultModal({
   onClose: () => void
 }) {
   const totalLost = Object.values(result.soldiersLost).reduce((a, b) => a + b, 0)
-  const totalRevived = Object.values(result.soldiersRevived).reduce((a, b) => a + b, 0)
 
   // 汇总各兵种总伤害/总击杀
   const totalDmgByType: Partial<Record<UnitId, number>> = {}

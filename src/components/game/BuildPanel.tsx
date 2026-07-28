@@ -1,5 +1,5 @@
 import { BUILDINGS, CONFIG, type BuildingId } from '@/game/config'
-import { buildCost, canAfford, effectiveMax, hasSkill, popCap, population, recruitCost, recruitMaxCount, towerDmg, wallAbsorb, type GameState } from '@/game/engine'
+import { buildCost, canAfford, effectiveMax, farmBonusPer, gatherPerPerson, popCap, population, recruitCost, recruitMaxCount, towerDmg, wallAbsorb, type GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
 import { CostTag, Panel } from './ui-bits'
 
@@ -9,22 +9,22 @@ function BuildingDesc({ state, id }: { state: GameState; id: BuildingId }) {
   const lv = state.buildings[id]
   switch (id) {
     case 'farm': {
-      const farmBonus = CONFIG.farmBonus * (hasSkill(state, 'ag_fertility') ? 2 : 1)
-      const base = CONFIG.foodGatherBase + lv * farmBonus
-      return <div className="truncate text-[11px] text-stone-500">每位村民食物产出 <b className="text-amber-300">{base}</b>/天（基础 {CONFIG.foodGatherBase} + 建筑 +{lv * farmBonus}）</div>
+      const { foodPer } = gatherPerPerson(state)
+      const bonus = lv * farmBonusPer(state)
+      return <div className="truncate text-[11px] text-stone-500">每位村民食物产出 <b className="text-amber-300">{foodPer}</b>/天（基础 {CONFIG.foodGatherBase} + 建筑 +{bonus}）</div>
     }
     case 'lumber': {
-      const base = CONFIG.gatherBase + lv
-      return <div className="truncate text-[11px] text-stone-500">每位村民木材产出 <b className="text-orange-300">{base}</b>/天（基础 {CONFIG.gatherBase} + 建筑 +{lv}）</div>
+      const { woodPer } = gatherPerPerson(state)
+      return <div className="truncate text-[11px] text-stone-500">每位村民木材产出 <b className="text-orange-300">{woodPer}</b>/天（基础 {CONFIG.gatherBase} + 建筑 +{lv}）</div>
     }
     case 'mine': {
-      const base = CONFIG.gatherBase + lv
-      return <div className="truncate text-[11px] text-stone-500">每位村民金币产出 <b className="text-yellow-300">{base}</b>/天（基础 {CONFIG.gatherBase} + 建筑 +{lv}）</div>
+      const { goldPer } = gatherPerPerson(state)
+      return <div className="truncate text-[11px] text-stone-500">每位村民金币产出 <b className="text-yellow-300">{goldPer}</b>/天（基础 {CONFIG.gatherBase} + 建筑 +{lv}）</div>
     }
     case 'house':
       return <div className="truncate text-[11px] text-stone-500">住房上限 +{CONFIG.houseCapPer}/座，当前上限 <b className="text-stone-200">{popCap(state)}</b></div>
     case 'barracks':
-      return <div className="truncate text-[11px] text-stone-500">{lv >= 3 ? '可训练骑士' : lv >= 2 ? '可训练弓手' : lv >= 1 ? '可训练民兵' : '解锁士兵训练'}</div>
+      return <div className="truncate text-[11px] text-stone-500">{lv >= 4 ? '可训练战神 🦾' : lv >= 3 ? '可训练骑士' : lv >= 2 ? '可训练弓手' : lv >= 1 ? '可训练民兵' : '解锁士兵训练'}</div>
     case 'wall': {
       const ab = wallAbsorb(state)
       return <div className="truncate text-[11px] text-stone-500">每级吸收 <b className="text-emerald-300">{ab}</b> 点伤害（共 <b className="text-emerald-300">{lv * ab}</b>）</div>
@@ -50,7 +50,6 @@ export default function BuildPanel({
   const rCost = recruitCost(state)
   const canRecruit = population(state) < popCap(state) && canAfford(state, rCost)
   const maxN = recruitMaxCount(state)
-  const totalCost = maxN * (rCost.food ?? 0)
   return (
     <Panel
       title="建造与招募"

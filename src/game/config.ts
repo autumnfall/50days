@@ -84,7 +84,11 @@ export const TOWER_DMG = 10
 
 // ---------------- 兵种 ----------------
 
-export type UnitId = 'militia' | 'archer' | 'knight'
+export type UnitId = 'militia' | 'archer' | 'knight' | 'warlord'
+
+/** 基础三兵种（战神为局外天赋解锁的衍生兵种，不参与常规循环） */
+export const BASE_UNIT_IDS = ['militia', 'archer', 'knight'] as const satisfies readonly UnitId[]
+export type BaseUnitId = (typeof BASE_UNIT_IDS)[number]
 
 export interface UnitDef {
   id: UnitId
@@ -112,6 +116,13 @@ export const UNITS: Record<UnitId, UnitDef> = {
     id: 'knight', name: '骑士', icon: '🐎',
     hp: 24, atk: 20, upkeep: 4, reqBarracks: 3,
     cost: { food: 14, gold: 12 },
+  },
+  // 局外天赋「战神」解锁：兵营 Lv4，全局唯一。
+  // hp/atk 仅为展示用基础值，实战属性 = 民兵/弓箭手/骑士各 1 名当前生效属性之和（见 engine.unitAtk/unitHp）
+  warlord: {
+    id: 'warlord', name: '战神', icon: '🦾',
+    hp: 47, atk: 39, upkeep: 10, reqBarracks: 4,
+    cost: { food: 100, gold: 100 },
   },
 }
 

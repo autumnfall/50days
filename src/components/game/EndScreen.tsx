@@ -1,6 +1,7 @@
 import type { GameState } from '@/game/engine'
+import { TALENT_POINT_CAP, type SettleResult } from '@/game/meta'
 
-export default function EndScreen({ state, onRestart, onLoad }: { state: GameState; onRestart: () => void; onLoad?: (slot: number) => void }) {
+export default function EndScreen({ state, settleInfo, onRestart, onLoad }: { state: GameState; settleInfo?: SettleResult | null; onRestart: () => void; onLoad?: (slot: number) => void }) {
   const victory = state.phase === 'victory'
   return (
     <div
@@ -31,11 +32,35 @@ export default function EndScreen({ state, onRestart, onLoad }: { state: GameSta
           </div>
           <div className="rounded-lg bg-stone-950/60 p-3">
             <div className="text-2xl font-black text-red-300">
-              {state.soldiers.militia + state.soldiers.archer + state.soldiers.knight}
+              {state.soldiers.militia + state.soldiers.archer + state.soldiers.knight + state.soldiers.warlord}
             </div>
             <div className="mt-1 text-xs text-stone-500">幸存士兵</div>
           </div>
         </div>
+        {settleInfo && (
+          <div className="mt-4 rounded-xl border border-amber-700/40 bg-amber-950/20 p-4 text-sm">
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-xl">🌟</span>
+              {settleInfo.gained > 0 ? (
+                <span className="font-bold text-amber-300">传承点 +{settleInfo.gained}</span>
+              ) : (
+                <span className="font-bold text-stone-400">
+                  {settleInfo.rawGain > 0 ? '传承点已达上限' : '坚守不足 15 天，未获得传承点'}
+                </span>
+              )}
+            </div>
+            <div className="mt-1 text-xs text-stone-400">
+              当前传承点 <b className="text-amber-300">{settleInfo.meta.earned}</b> / {TALENT_POINT_CAP}
+              {settleInfo.meta.earned < TALENT_POINT_CAP && settleInfo.gained > 0 && (
+                <span className="text-stone-500">（{settleInfo.victory ? '通关 +6' : '败北每 15 天 +1，最多 +3'}）</span>
+              )}
+            </div>
+            <div className="mt-2 text-[11px] text-stone-500">
+              生涯：{settleInfo.meta.runs} 局 · {settleInfo.meta.victories} 胜 · 最长坚守 {settleInfo.meta.bestDay} 天
+              {settleInfo.meta.earned > 0 && ' —— 开局界面可分配/洗点局外天赋'}
+            </div>
+          </div>
+        )}
         <button
           onClick={onRestart}
           className="mt-8 w-full rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 py-4 text-lg font-black tracking-[0.3em] text-stone-950 transition hover:from-amber-500 hover:to-amber-400 active:scale-[0.98]"

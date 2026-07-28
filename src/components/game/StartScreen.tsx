@@ -1,10 +1,120 @@
 import { useState } from 'react'
 import { CONFIG, NATIONS, type NationId } from '@/game/config'
+import {
+  TALENTS, TALENT_BRANCH_INFO, TALENT_BRANCH_ORDER, TALENT_POINT_CAP,
+  canActivateTalent, deactivateTalent, loadMeta, saveMeta, talentsCost,
+  type MetaState, type TalentDef,
+} from '@/game/meta'
 import { hasAnySave } from '@/game/save'
 import { cn } from '@/lib/utils'
 
-export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId) => void; onLoad?: (slot: number) => void }) {
+function TalentNode({
+  def,
+  meta,
+  onToggle,
+}: {
+  def: TalentDef
+  meta: MetaState
+  onToggle: (id: string) => void
+}) {
+  const active = meta.talents.includes(def.id)
+  const check = canActivateTalent(meta.talents, def.id, meta.earned)
+  const clickable = active || check.ok
+  return (
+    <button
+      onClick={() => onToggle(def.id)}
+      disabled={!clickable}
+      title={`${def.name}（${def.cost} 点）\n${def.desc}${!active && !check.ok ? `\n🔒 ${check.reason}` : ''}`}
+      className={cn(
+        'w-full rounded-lg border px-2 py-1.5 text-left transition',
+        active
+          ? def.mechanic
+            ? 'border-purple-500 bg-purple-950/40 shadow-sm shadow-purple-500/20'
+            : 'border-amber-500 bg-amber-950/40 shadow-sm shadow-amber-500/10'
+          : clickable
+            ? 'border-stone-700 bg-stone-950/50 hover:border-stone-500 hover:bg-stone-800/60'
+            : 'cursor-not-allowed border-stone-800 bg-stone-950/30 opacity-40',
+      )}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className="text-base">{def.icon}</span>
+        <span className={cn('flex-1 truncate text-[11px] font-bold', active ? 'text-amber-200' : 'text-stone-300')}>
+          {def.name}
+        </span>
+        <span className={cn('text-[10px] font-bold', active ? 'text-amber-400' : 'text-stone-500')}>
+          {active ? '✓' : `${def.cost}点`}
+        </span>
+      </div>
+      <div className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-stone-500">{def.desc}</div>
+    </button>
+  )
+}
+
+function TalentTree({ meta, setMeta }: { meta: MetaState; setMeta: (m: MetaState) => void }) {
+  const used = talentsCost(meta.talents)
+  const toggle = (id: string) => {
+    const talents = meta.talents.includes(id)
+      ? deactivateTalent(meta.talents, id)
+      : canActivateTalent(meta.talents, id, meta.earned).ok
+        ? [...meta.talents, id]
+        : meta.talents
+    const next = { ...meta, talents }
+    setMeta(next)
+    saveMeta(next)
+  }
+  const reset = () => {
+    const next = { ...meta, talents: [] }
+    setMeta(next)
+    saveMeta(next)
+  }
+
+  return (
+    <div className="mt-6 rounded-xl border border-stone-700/60 bg-stone-950/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold tracking-widest text-stone-400">— 局外天赋树 —</h2>
+        <div className="flex items-center gap-3 text-[11px]">
+          <span className="text-stone-400">
+            🌟 传承点 <b className="text-amber-300">{used}</b>
+            <span className="text-stone-500"> / {meta.earned}（上限 {TALENT_POINT_CAP}）</span>
+          </span>
+          {used > 0 && (
+            <button
+              onClick={reset}
+              className="rounded border border-stone-600 px-2 py-0.5 font-bold text-stone-300 transition hover:border-red-500/60 hover:text-red-300"
+            >
+              免费洗点
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="mt-1 text-[11px] text-stone-500">
+        通关 +6 点，败北每坚守 15 天 +1 点（最多 +3）。天赋在开局前随时调整，开局后生效整局。
+      </p>
+      {meta.earned === 0 ? (
+        <p className="mt-3 rounded-lg bg-stone-900/60 px-3 py-2 text-center text-[11px] text-stone-500">
+          还没有传承点——完成一局游戏（无论胜负）即可获得，用来激活局外天赋。
+        </p>
+      ) : (
+        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {TALENT_BRANCH_ORDER.map((branch) => (
+            <div key={branch} className="space-y-1.5">
+              <div className="text-center text-[11px] font-bold tracking-widest text-stone-400">
+                {TALENT_BRANCH_INFO[branch].icon} {TALENT_BRANCH_INFO[branch].name}
+              </div>
+              {TALENTS.filter((t) => t.branch === branch).map((def) => (
+                <TalentNode key={def.id} def={def} meta={meta} onToggle={toggle} />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId, talents: string[]) => void; onLoad?: (slot: number) => void }) {
   const [selected, setSelected] = useState<NationId | null>(null)
+  const [meta, setMeta] = useState<MetaState>(loadMeta)
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-b from-stone-950 via-stone-900 to-amber-950/40 px-4 py-8">
@@ -15,7 +125,7 @@ export default function StartScreen({ onStart, onLoad }: { onStart: (nation: Nat
         <span className="absolute bottom-[12%] right-[12%]">⛰️</span>
       </div>
 
-      <div className="relative w-full max-w-3xl rounded-2xl border border-amber-700/40 bg-stone-900/80 p-6 shadow-2xl backdrop-blur-md sm:p-8">
+      <div className="relative w-full max-w-4xl rounded-2xl border border-amber-700/40 bg-stone-900/80 p-6 shadow-2xl backdrop-blur-md sm:p-8">
         <div className="text-center">
           <div className="text-5xl">🏰</div>
           <h1 className="mt-3 text-4xl font-black tracking-widest text-amber-200 sm:text-5xl">五十日坚守</h1>
@@ -62,8 +172,11 @@ export default function StartScreen({ onStart, onLoad }: { onStart: (nation: Nat
           })}
         </div>
 
+        {/* 局外天赋树 */}
+        <TalentTree meta={meta} setMeta={setMeta} />
+
         <button
-          onClick={() => selected && onStart(selected)}
+          onClick={() => selected && onStart(selected, meta.talents)}
           disabled={!selected}
           className={cn(
             'mt-7 w-full rounded-xl py-4 text-lg font-black tracking-[0.3em] transition active:scale-[0.98]',
@@ -72,7 +185,9 @@ export default function StartScreen({ onStart, onLoad }: { onStart: (nation: Nat
               : 'cursor-not-allowed bg-stone-800 text-stone-600',
           )}
         >
-          {selected ? `以「${NATIONS[selected].name}」开局` : '请先选择文明'}
+          {selected
+            ? `以「${NATIONS[selected].name}」开局${meta.talents.length > 0 ? `（携带 ${meta.talents.length} 项天赋）` : ''}`
+            : '请先选择文明'}
         </button>
 
         {onLoad && hasAnySave() && (

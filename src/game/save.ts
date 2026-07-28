@@ -28,6 +28,9 @@ function deserialize(json: string): GameState | null {
     const parsed = JSON.parse(json)
     if (!parsed || typeof parsed.day !== 'number' || !parsed.resources || !parsed.phase) return null
     if (!parsed.dungeon) parsed.dungeon = { highestCleared: 0, dailyAttempted: false, pendingResult: null }
+    // 兼容旧档：局外天赋 / 战神兵种
+    if (!Array.isArray(parsed.talents)) parsed.talents = []
+    parsed.soldiers = { militia: 0, archer: 0, knight: 0, warlord: 0, ...parsed.soldiers }
     return { ...parsed, skills: new Set<string>(parsed.skills ?? []) }
   } catch {
     return null
@@ -77,7 +80,7 @@ export function getSaveMetadata(slot: number): SaveMetadata | null {
 }
 
 export function getAllSaveMetadata(): (SaveMetadata | null)[] {
-  return [0, 1, 2, 3].map(getSaveMetadata)
+  return Array.from({ length: SAVE_SLOTS + 1 }, (_, i) => i).map(getSaveMetadata)
 }
 
 export function hasAnySave(): boolean {
