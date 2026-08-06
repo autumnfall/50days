@@ -3,6 +3,7 @@
 // ============================================================
 
 import type { GameState } from './engine'
+import type { EffectContrib } from './effects'
 
 // ---------------- 天赋定义 ----------------
 
@@ -19,6 +20,8 @@ export interface TalentDef {
   requires?: string // 支链内链式前置
   /** true = 机制类（每条支线最后一层），仅用于 UI 标记 */
   mechanic?: boolean
+  /** 被动效果声明（一次性开局效果不在此处，见 engine.createGame） */
+  effects?: EffectContrib
 }
 
 export const TALENT_BRANCH_INFO: Record<TalentBranch, { name: string; icon: string }> = {
@@ -33,51 +36,68 @@ export const TALENT_BRANCH_ORDER: TalentBranch[] = ['farm', 'industry', 'defense
 export const TALENTS: TalentDef[] = [
   // ---- 🌾 农耕线 ----
   { id: 'farm_cap', branch: 'farm', tier: 1, name: '开垦', icon: '🚜', cost: 2,
-    desc: '农场建造上限 +2' },
+    desc: '农场建造上限 +2',
+    effects: { buildingCapFlat: { farm: 2 } } },
   { id: 'farm_hands', branch: 'farm', tier: 2, name: '精耕', icon: '🌱', cost: 3, requires: 'farm_cap',
-    desc: '每位务农村民食物产出 +1' },
+    desc: '每位务农村民食物产出 +1',
+    effects: { gatherFlat: { food: 1 } } },
   { id: 'granary_start', branch: 'farm', tier: 3, name: '余粮', icon: '🛖', cost: 4, requires: 'farm_hands',
     desc: '开局食物 +20' },
   { id: 'rich_soil', branch: 'farm', tier: 4, name: '沃土', icon: '🌽', cost: 5, requires: 'granary_start',
-    desc: '农场每级加成 +1（+2 → +3）' },
+    desc: '农场每级加成 +1（+2 → +3）',
+    effects: { farmBonusFlat: 1 } },
   { id: 'spring_harvest', branch: 'farm', tier: 5, name: '春播秋收', icon: '🌟', cost: 6, requires: 'rich_soil', mechanic: true,
-    desc: '每 10 天（第 10/20/30/40 天）农场自动提升 1 级，不消耗资源，可突破建造上限' },
+    desc: '每 10 天（第 10/20/30/40 天）农场自动提升 1 级，不消耗资源，可突破建造上限',
+    effects: { flags: { springHarvest: true } } },
 
   // ---- 🪓 工业线 ----
   { id: 'industry_cap', branch: 'industry', tier: 1, name: '扩建', icon: '🏗️', cost: 2,
-    desc: '伐木场上限 +1，矿场上限 +1' },
+    desc: '伐木场上限 +1，矿场上限 +1',
+    effects: { buildingCapFlat: { lumber: 1, mine: 1 } } },
   { id: 'lumberjack', branch: 'industry', tier: 2, name: '匠作', icon: '🪚', cost: 3, requires: 'industry_cap',
-    desc: '每位伐木村民木材产出 +1' },
+    desc: '每位伐木村民木材产出 +1',
+    effects: { gatherFlat: { wood: 1 } } },
   { id: 'rich_vein', branch: 'industry', tier: 3, name: '富矿', icon: '⛏️', cost: 4, requires: 'lumberjack',
     desc: '开局木材 +15、金币 +10' },
   { id: 'deep_mine', branch: 'industry', tier: 4, name: '深矿', icon: '💎', cost: 5, requires: 'rich_vein',
-    desc: '每位采矿村民金币产出 +1' },
+    desc: '每位采矿村民金币产出 +1',
+    effects: { gatherFlat: { gold: 1 } } },
   { id: 'half_scaling', branch: 'industry', tier: 5, name: '营造法式', icon: '📐', cost: 6, requires: 'deep_mine', mechanic: true,
-    desc: '建筑升级的加价幅度减半（向上取整），越升越贵的压力大幅缓解' },
+    desc: '建筑升级的加价幅度减半（向上取整），越升越贵的压力大幅缓解',
+    effects: { flags: { halfScaling: true } } },
 
   // ---- 🧱 城防线 ----
   { id: 'house_cap', branch: 'defense', tier: 1, name: '民居扩建', icon: '🏠', cost: 2,
-    desc: '民居建造上限 +1（人口上限 +6）' },
+    desc: '民居建造上限 +1（人口上限 +6）',
+    effects: { buildingCapFlat: { house: 1 } } },
   { id: 'reinforce', branch: 'defense', tier: 2, name: '加固', icon: '🔩', cost: 3, requires: 'house_cap',
-    desc: '城墙每级吸收 +10（35 → 45）' },
+    desc: '城墙每级吸收 +10（35 → 45）',
+    effects: { wallAbsorbFlat: 10 } },
   { id: 'marksman', branch: 'defense', tier: 3, name: '射术', icon: '🎯', cost: 4, requires: 'reinforce',
-    desc: '箭塔伤害 +4（10 → 14）' },
+    desc: '箭塔伤害 +4（10 → 14）',
+    effects: { towerDmgFlat: 4 } },
   { id: 'bastion_cap', branch: 'defense', tier: 4, name: '壁垒扩建', icon: '🏰', cost: 5, requires: 'marksman',
-    desc: '城墙上限 +1，箭塔上限 +1' },
+    desc: '城墙上限 +1，箭塔上限 +1',
+    effects: { buildingCapFlat: { wall: 1, tower: 1 } } },
   { id: 'arrow_volley', branch: 'defense', tier: 5, name: '箭阵', icon: '🏹', cost: 6, requires: 'bastion_cap', mechanic: true,
-    desc: '每座已建造的城墙或箭塔，使所有箭塔伤害 +2' },
+    desc: '每座已建造的城墙或箭塔，使所有箭塔伤害 +2',
+    effects: { towerDmgPerDefBuilding: 2 } },
 
   // ---- ⚔️ 军备线 ----
   { id: 'militia_start', branch: 'military', tier: 1, name: '募兵', icon: '🛡️', cost: 2,
     desc: '开局即有 2 名民兵' },
   { id: 'drill', branch: 'military', tier: 2, name: '操练', icon: '🥁', cost: 3, requires: 'militia_start',
-    desc: '全体士兵攻击 +1' },
+    desc: '全体士兵攻击 +1',
+    effects: { unitAtkFlat: 1 } },
   { id: 'armor', branch: 'military', tier: 3, name: '甲胄', icon: '🪖', cost: 4, requires: 'drill',
-    desc: '全体士兵生命 +3' },
+    desc: '全体士兵生命 +3',
+    effects: { unitHpFlat: 3 } },
   { id: 'militia_economy', branch: 'military', tier: 4, name: '义勇', icon: '🌿', cost: 5, requires: 'armor',
-    desc: '回合结束时，每有 1 名民兵，食物/木材/金币各 +2（不吃任何加成）' },
+    desc: '回合结束时，每有 1 名民兵，食物/木材/金币各 +2（不吃任何加成）',
+    effects: { militiaIncome: 2 } },
   { id: 'warlord', branch: 'military', tier: 5, name: '战神', icon: '🦾', cost: 6, requires: 'militia_economy', mechanic: true,
-    desc: '兵营可升至 Lv4，解锁终极兵种「战神」（全局唯一，100 食物 + 100 金币，维护 10 食物）：属性 = 民兵/弓箭手/骑士各 1 名当前生效属性之和' },
+    desc: '兵营可升至 Lv4，解锁终极兵种「战神」（全局唯一，100 食物 + 100 金币，维护 10 食物）：属性 = 民兵/弓箭手/骑士各 1 名当前生效属性之和',
+    effects: { buildingCapFlat: { barracks: 1 } } },
 ]
 
 export function getTalent(id: string): TalentDef | undefined {

@@ -4,7 +4,10 @@
 // 加新内容 = 加配置数据；漏接效果字段 = 编译错误。
 // ============================================================
 
+import { NATIONS, SKILLS } from './config'
 import type { BaseUnitId, BuildingId, ResourceId } from './config'
+import { TALENTS } from './meta'
+import { RELICS } from './relics'
 import type { GameState } from './engine'
 
 // ---------------- EffectMods：一局内所有被动效果的汇总视图 ----------------
@@ -231,87 +234,25 @@ export function mergeMods(base: EffectMods, c: EffectContrib): EffectMods {
 // ---------------- collectMods：单点收集 ----------------
 
 /**
- * 汇总一局内所有被动效果。
+ * 汇总一局内所有被动效果：纯数据 merge，读取各 Def 的 effects 声明。
  * 来源合并顺序（决定 mults 数组顺序，从而保持"每步取整"的逐位语义）：
- * 文明 → 技能（按声明顺序）→ 天赋 → 遗物 → 终局升级换算。
- *
- * TODO(commit 2)：以下硬编码分支将替换为纯数据 merge（读取各 Def 的 effects 字段）。
+ * 文明 → 技能（按 SKILLS 声明顺序）→ 天赋（按 TALENTS 声明顺序）→ 遗物（按 RELICS 声明顺序）→ 终局升级换算。
+ * 加新内容 = 在配置里加 effects 声明，此处无需改动。
  */
 export function collectMods(s: GameState): EffectMods {
   let m = EMPTY_MODS
-  const hasSkill = (id: string) => s.skills.has(id)
-  const hasTalent = (id: string) => s.talents.includes(id)
-  const hasRelic = (id: string) => s.run?.relics.includes(id) ?? false
 
   // ---- 文明（被动部分；开局一次性 bonus 留在 chooseNation）----
-  if (s.nation === 'agriculture') m = mergeMods(m, { gatherFlat: { food: 1 }, recruitCostMults: [0.75] })
-  if (s.nation === 'military') m = mergeMods(m, { unitAtkFlat: 2, trainCostMults: [0.8] })
-  if (s.nation === 'commerce') m = mergeMods(m, { gatherFlat: { gold: 1 }, buildCostMults: [0.85] })
+  if (s.nation) m = mergeMods(m, NATIONS[s.nation].effects ?? {})
 
-  // ---- 技能 ----
-  if (hasSkill('ag_irrigate')) m = mergeMods(m, { gatherFlat: { food: 1 } })
-  if (hasSkill('ag_fertility')) m = mergeMods(m, { farmBonusMult: 2 })
-  if (hasSkill('ag_abundance')) m = mergeMods(m, { gatherMults: { food: [1.25] }, wandererInterval: 2 })
-  if (hasSkill('ag_granary')) m = mergeMods(m, { popCapFlat: 4, starveFlatReduction: 1 })
-  if (hasSkill('ag_recruit')) m = mergeMods(m, { recruitCostMults: [0.5], wandererBonus: 1 })
-  if (hasSkill('ag_population')) m = mergeMods(m, { popCapFlat: 8, starveFlatReduction: 1 })
-  if (hasSkill('ag_militia')) m = mergeMods(m, { unitAtkByType: { militia: 3 }, unitHpByType: { militia: 6 } })
-  if (hasSkill('ag_allmilitia')) m = mergeMods(m, { flags: { militiaAll: true } })
-  if (hasSkill('ag_earthwall')) m = mergeMods(m, { wallAbsorbFlat: 15, wallRepairRatio: 0.5 })
-  if (hasSkill('mi_drill')) m = mergeMods(m, { unitAtkFlat: 1 })
-  if (hasSkill('mi_veteran')) m = mergeMods(m, { unitAtkByType: { knight: 6, archer: 3 } })
-  if (hasSkill('mi_bloodlust')) m = mergeMods(m, { flags: { bloodlust: true } })
-  if (hasSkill('mi_armor')) m = mergeMods(m, { unitHpFlat: 4 })
-  if (hasSkill('mi_discipline')) m = mergeMods(m, { unitHpFlat: 6, enemyDmgMult: 0.9 })
-  if (hasSkill('mi_soulguard')) m = mergeMods(m, { reviveRatios: [0.3] })
-  if (hasSkill('mi_warhorn')) m = mergeMods(m, { firstRoundMult: 1.4 })
-  if (hasSkill('mi_honor')) m = mergeMods(m, { honorPerWin: 1, trainCostMults: [0.9] })
-  if (hasSkill('mi_kingarmy')) m = mergeMods(m, { unitAtkFlat: 3, unitHpFlat: 6, trainCostMults: [0.8] })
-  if (hasSkill('co_tariff')) m = mergeMods(m, { gatherMults: { gold: [1.2] } })
-  if (hasSkill('co_caravan')) m = mergeMods(m, { interestRateMax: 0.02, flags: { traderBoost: true } })
-  if (hasSkill('co_goldwater')) m = mergeMods(m, { interestRateMax: 0.05, lootMults: [1.25], exchangeCostMult: 0.75 })
-  if (hasSkill('co_engineer')) m = mergeMods(m, { towerDmgFlat: 4, wallAbsorbFlat: 10 })
-  if (hasSkill('co_steel')) m = mergeMods(m, { towerDmgFlat: 6, buildCostMults: [0.9] })
-  if (hasSkill('co_fortress')) m = mergeMods(m, { towerDmgFlat: 10, wallAbsorbFlat: 20 })
-  if (hasSkill('co_market')) m = mergeMods(m, { gatherFlat: { gold: 1 } })
-  if (hasSkill('co_mercenary')) m = mergeMods(m, { flags: { mercenary: true } })
-  // 注意：lootMults 保序 = 当前 engine 的应用顺序（war_economy 1.5 先于 goldwater 1.25 结算）。
-  // commit 2 数据化后将按 SKILLS 声明顺序（goldwater 在前），存在同时拥有两个 T3 商业技能时
-  // ±1 金币的取整差异，可接受。
-  if (hasSkill('co_war_economy')) m = mergeMods(m, { lootMults: [1.5], honorPerWin: 1 })
+  // ---- 技能（已解锁的，按声明顺序）----
+  for (const def of SKILLS) if (s.skills.has(def.id) && def.effects) m = mergeMods(m, def.effects)
 
-  // ---- 天赋 ----
-  if (hasTalent('farm_cap')) m = mergeMods(m, { buildingCapFlat: { farm: 2 } })
-  if (hasTalent('farm_hands')) m = mergeMods(m, { gatherFlat: { food: 1 } })
-  if (hasTalent('rich_soil')) m = mergeMods(m, { farmBonusFlat: 1 })
-  if (hasTalent('spring_harvest')) m = mergeMods(m, { flags: { springHarvest: true } })
-  if (hasTalent('industry_cap')) m = mergeMods(m, { buildingCapFlat: { lumber: 1, mine: 1 } })
-  if (hasTalent('lumberjack')) m = mergeMods(m, { gatherFlat: { wood: 1 } })
-  if (hasTalent('deep_mine')) m = mergeMods(m, { gatherFlat: { gold: 1 } })
-  if (hasTalent('half_scaling')) m = mergeMods(m, { flags: { halfScaling: true } })
-  if (hasTalent('house_cap')) m = mergeMods(m, { buildingCapFlat: { house: 1 } })
-  if (hasTalent('reinforce')) m = mergeMods(m, { wallAbsorbFlat: 10 })
-  if (hasTalent('marksman')) m = mergeMods(m, { towerDmgFlat: 4 })
-  if (hasTalent('bastion_cap')) m = mergeMods(m, { buildingCapFlat: { wall: 1, tower: 1 } })
-  if (hasTalent('arrow_volley')) m = mergeMods(m, { towerDmgPerDefBuilding: 2 })
-  if (hasTalent('drill')) m = mergeMods(m, { unitAtkFlat: 1 })
-  if (hasTalent('armor')) m = mergeMods(m, { unitHpFlat: 3 })
-  if (hasTalent('militia_economy')) m = mergeMods(m, { militiaIncome: 2 })
-  if (hasTalent('warlord')) m = mergeMods(m, { buildingCapFlat: { barracks: 1 } })
+  // ---- 天赋（已激活的，按声明顺序；一次性开局效果无 effects 字段）----
+  for (const def of TALENTS) if (s.talents.includes(def.id) && def.effects) m = mergeMods(m, def.effects)
 
-  // ---- 遗物 ----
-  if (hasRelic('harvest_totem')) m = mergeMods(m, { gatherMults: { food: [1.15] } })
-  if (hasRelic('whetstone')) m = mergeMods(m, { unitAtkMult: 1.1 })
-  if (hasRelic('sturdy_plans')) m = mergeMods(m, { buildCostMults: [0.9] })
-  if (hasRelic('war_banner')) m = mergeMods(m, { flags: { warBanner: true } })
-  if (hasRelic('merchant_charm')) m = mergeMods(m, { interestRateAdd: 0.03 })
-  if (hasRelic('field_medic')) m = mergeMods(m, { reviveRatios: [0.2] })
-  if (hasRelic('thick_walls')) m = mergeMods(m, { wallAbsorbMult: 1.2 })
-  if (hasRelic('longbow')) m = mergeMods(m, { towerDmgMult: 1.25 })
-  if (hasRelic('golden_touch')) m = mergeMods(m, { lootMults: [1.3] })
-  if (hasRelic('pioneer_boots')) m = mergeMods(m, { wandererBonus: 1 })
-  if (hasRelic('sacred_grain')) m = mergeMods(m, { flags: { sacredGrain: true } })
-  if (hasRelic('war_drum')) m = mergeMods(m, { firstRoundMult: 1.25 })
+  // ---- 遗物（已获得的，按声明顺序）----
+  if (s.run) for (const def of Object.values(RELICS)) if (s.run.relics.includes(def.id)) m = mergeMods(m, def.effects)
 
   // ---- 终局升级换算（局内系统，非内容配置，固定换算）----
   if (s.upgrades.army > 0) {

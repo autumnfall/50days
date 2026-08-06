@@ -3,6 +3,7 @@
 // ============================================================
 
 import { RELICS, getRelic } from './relics'
+import type { EffectContrib } from './effects'
 
 export type ResourceId = 'food' | 'wood' | 'gold'
 
@@ -180,6 +181,8 @@ export interface NationDef {
   title: string
   desc: string
   bonus: string[] // 展示用
+  /** 被动效果（开局一次性 bonus 不在此处，见 engine.chooseNation） */
+  effects?: EffectContrib
 }
 
 export const NATIONS: Record<NationId, NationDef> = {
@@ -187,16 +190,19 @@ export const NATIONS: Record<NationId, NationDef> = {
     id: 'agriculture', name: '丰饶农耕国', icon: '🌾', title: '大地之子',
     desc: '世代耕耘的民族，深谙土地之道，以充沛的粮食供养庞大的人口。',
     bonus: ['食物采集 +1/人', '招募村民费用 -25%', '开局食物 +15'],
+    effects: { gatherFlat: { food: 1 }, recruitCostMults: [0.75] },
   },
   military: {
     id: 'military', name: '铁血军事国', icon: '⚔️', title: '战争之裔',
     desc: '崇尚武力的战士国度，每个孩童从小接受战斗训练，军纪严明。',
     bonus: ['全体士兵攻击 +2', '训练费用 -20%', '开局即有 1 座兵营'],
+    effects: { unitAtkFlat: 2, trainCostMults: [0.8] },
   },
   commerce: {
     id: 'commerce', name: '黄金商业联邦', icon: '🪙', title: '商路之主',
     desc: '纵横商路的富裕联邦，金币流转间创造财富，以财力换取一切。',
     bonus: ['金币采集 +1/人', '建筑费用 -15%', '开局金币 +15'],
+    effects: { gatherFlat: { gold: 1 }, buildCostMults: [0.85] },
   },
 }
 
@@ -216,6 +222,8 @@ export interface SkillDef {
   desc: string
   cost: number // 荣耀点：T1=2 / T2=4 / T3=6
   requires?: SkillId // 前置技能
+  /** 被动效果声明（由 effects.collectMods 统一收集结算） */
+  effects?: EffectContrib
 }
 
 export const SKILL_TIER_COST = { 1: 2, 2: 4, 3: 6 } as const
@@ -224,71 +232,98 @@ export const SKILLS: SkillDef[] = [
   // ================= 丰饶农耕国 =================
   // -- 耕作之道 --
   { id: 'ag_irrigate', nation: 'agriculture', column: '耕作之道', tier: 1, name: '精耕细作', icon: '🚜', cost: 2,
-    desc: '每位务农村民食物产出再 +1' },
+    desc: '每位务农村民食物产出再 +1',
+    effects: { gatherFlat: { food: 1 } } },
   { id: 'ag_fertility', nation: 'agriculture', column: '耕作之道', tier: 2, name: '丰收祝福', icon: '🌽', cost: 4, requires: 'ag_irrigate',
-    desc: '农场加成翻倍（每座 +4 而非 +2）' },
+    desc: '农场加成翻倍（每座 +4 而非 +2）',
+    effects: { farmBonusMult: 2 } },
   { id: 'ag_abundance', nation: 'agriculture', column: '耕作之道', tier: 3, name: '生生不息', icon: '🌟', cost: 6, requires: 'ag_fertility',
-    desc: '食物采集总产出 +25%；流浪者每 2 天来投' },
+    desc: '食物采集总产出 +25%；流浪者每 2 天来投',
+    effects: { gatherMults: { food: [1.25] }, wandererInterval: 2 } },
   // -- 聚落之道 --
   { id: 'ag_granary', nation: 'agriculture', column: '聚落之道', tier: 1, name: '大型谷仓', icon: '🛖', cost: 2,
-    desc: '住房上限 +4，且饥荒时少饿死 1 人' },
+    desc: '住房上限 +4，且饥荒时少饿死 1 人',
+    effects: { popCapFlat: 4, starveFlatReduction: 1 } },
   { id: 'ag_recruit', nation: 'agriculture', column: '聚落之道', tier: 2, name: '招贤纳士', icon: '🧲', cost: 4, requires: 'ag_granary',
-    desc: '招募村民费用 -50%；流浪者每次来投 +2 人' },
+    desc: '招募村民费用 -50%；流浪者每次来投 +2 人',
+    effects: { recruitCostMults: [0.5], wandererBonus: 1 } },
   { id: 'ag_population', nation: 'agriculture', column: '聚落之道', tier: 3, name: '人丁兴旺', icon: '🏘️', cost: 6, requires: 'ag_recruit',
-    desc: '住房上限再 +8；饥荒再少饿死 1 人（合计 2 人）' },
+    desc: '住房上限再 +8；饥荒再少饿死 1 人（合计 2 人）',
+    effects: { popCapFlat: 8, starveFlatReduction: 1 } },
   // -- 农兵之道 --
   { id: 'ag_militia', nation: 'agriculture', column: '农兵之道', tier: 1, name: '民兵训练', icon: '🛡️', cost: 2,
-    desc: '民兵攻击 +3，生命 +6' },
+    desc: '民兵攻击 +3，生命 +6',
+    effects: { unitAtkByType: { militia: 3 }, unitHpByType: { militia: 6 } } },
   { id: 'ag_allmilitia', nation: 'agriculture', column: '农兵之道', tier: 2, name: '全民皆兵', icon: '🌿', cost: 4, requires: 'ag_militia',
-    desc: '战斗中每位村民协防，每轮我方伤害 +（村民数 × 2）' },
+    desc: '战斗中每位村民协防，每轮我方伤害 +（村民数 × 2）',
+    effects: { flags: { militiaAll: true } } },
   { id: 'ag_earthwall', nation: 'agriculture', column: '农兵之道', tier: 3, name: '大地壁垒', icon: '🏞️', cost: 6, requires: 'ag_allmilitia',
-    desc: '城墙每级吸收 +15；被摧毁的城墙战后自动修复一半' },
+    desc: '城墙每级吸收 +15；被摧毁的城墙战后自动修复一半',
+    effects: { wallAbsorbFlat: 15, wallRepairRatio: 0.5 } },
 
   // ================= 铁血军事国 =================
   // -- 武备之道 --
   { id: 'mi_drill', nation: 'military', column: '武备之道', tier: 1, name: '严格操练', icon: '🎯', cost: 2,
-    desc: '全体士兵攻击再 +1' },
+    desc: '全体士兵攻击再 +1',
+    effects: { unitAtkFlat: 1 } },
   { id: 'mi_veteran', nation: 'military', column: '武备之道', tier: 2, name: '百战老兵', icon: '🎖️', cost: 4, requires: 'mi_drill',
-    desc: '骑士攻击 +6，弓箭手攻击 +3' },
+    desc: '骑士攻击 +6，弓箭手攻击 +3',
+    effects: { unitAtkByType: { knight: 6, archer: 3 } } },
   { id: 'mi_bloodlust', nation: 'military', column: '武备之道', tier: 3, name: '嗜血狂怒', icon: '🔥', cost: 6, requires: 'mi_veteran',
-    desc: '每击杀 3 敌，全体攻 +1（战斗内累积）' },
+    desc: '每击杀 3 敌，全体攻 +1（战斗内累积）',
+    effects: { flags: { bloodlust: true } } },
   // -- 坚甲之道 --
   { id: 'mi_armor', nation: 'military', column: '坚甲之道', tier: 1, name: '铁甲锻造', icon: '🪖', cost: 2,
-    desc: '全体士兵生命 +4' },
+    desc: '全体士兵生命 +4',
+    effects: { unitHpFlat: 4 } },
   { id: 'mi_discipline', nation: 'military', column: '坚甲之道', tier: 2, name: '钢铁纪律', icon: '⚙️', cost: 4, requires: 'mi_armor',
-    desc: '全体士兵生命再 +6；战斗中每轮敌方伤害 × 0.9' },
+    desc: '全体士兵生命再 +6；战斗中每轮敌方伤害 × 0.9',
+    effects: { unitHpFlat: 6, enemyDmgMult: 0.9 } },
   { id: 'mi_soulguard', nation: 'military', column: '坚甲之道', tier: 3, name: '英魂庇护', icon: '💂', cost: 6, requires: 'mi_discipline',
-    desc: '每场战斗结束时，各兵种复活其阵亡数的 30%（向下取整）' },
+    desc: '每场战斗结束时，各兵种复活其阵亡数的 30%（向下取整）',
+    effects: { reviveRatios: [0.3] } },
   // -- 军势之道 --
   { id: 'mi_warhorn', nation: 'military', column: '军势之道', tier: 1, name: '战争号角', icon: '📯', cost: 2,
-    desc: '战斗首轮我方伤害 +40%' },
+    desc: '战斗首轮我方伤害 +40%',
+    effects: { firstRoundMult: 1.4 } },
   { id: 'mi_honor', nation: 'military', column: '军势之道', tier: 2, name: '军功授爵', icon: '🏅', cost: 4, requires: 'mi_warhorn',
-    desc: '战斗胜利荣耀 +1；训练费用 × 0.9' },
+    desc: '战斗胜利荣耀 +1；训练费用 × 0.9',
+    effects: { honorPerWin: 1, trainCostMults: [0.9] } },
   { id: 'mi_kingarmy', nation: 'military', column: '军势之道', tier: 3, name: '王者之师', icon: '👑', cost: 6, requires: 'mi_honor',
-    desc: '全体士兵攻 +3、血 +6；训练费用 × 0.8' },
+    desc: '全体士兵攻 +3、血 +6；训练费用 × 0.8',
+    effects: { unitAtkFlat: 3, unitHpFlat: 6, trainCostMults: [0.8] } },
 
   // ================= 黄金商业联邦 =================
   // -- 商路之道 --
   { id: 'co_tariff', nation: 'commerce', column: '商路之道', tier: 1, name: '商路关税', icon: '🏦', cost: 2,
-    desc: '金币采集产出 +20%' },
+    desc: '金币采集产出 +20%',
+    effects: { gatherMults: { gold: [1.2] } } },
   { id: 'co_caravan', nation: 'commerce', column: '商路之道', tier: 2, name: '四方商队', icon: '🐪', cost: 4, requires: 'co_tariff',
-    desc: '每天按金币存量 2% 获得利息；「远行商队」事件权重 ×2' },
+    desc: '每天按金币存量 2% 获得利息；「远行商队」事件权重 ×2',
+    effects: { interestRateMax: 0.02, flags: { traderBoost: true } } },
   { id: 'co_goldwater', nation: 'commerce', column: '商路之道', tier: 3, name: '黄金水道', icon: '💫', cost: 6, requires: 'co_caravan',
-    desc: '利息提升至 5%；战斗缴获 +25%；资源兑换荣耀费用 × 0.75' },
+    desc: '利息提升至 5%；战斗缴获 +25%；资源兑换荣耀费用 × 0.75',
+    effects: { interestRateMax: 0.05, lootMults: [1.25], exchangeCostMult: 0.75 } },
   // -- 重工之道 --
   { id: 'co_engineer', nation: 'commerce', column: '重工之道', tier: 1, name: '能工巧匠', icon: '⚙️', cost: 2,
-    desc: '箭塔伤害 +4，城墙吸收 +10/级' },
+    desc: '箭塔伤害 +4，城墙吸收 +10/级',
+    effects: { towerDmgFlat: 4, wallAbsorbFlat: 10 } },
   { id: 'co_steel', nation: 'commerce', column: '重工之道', tier: 2, name: '精钢工艺', icon: '🏗️', cost: 4, requires: 'co_engineer',
-    desc: '箭塔伤害再 +6；建筑费用 × 0.9' },
+    desc: '箭塔伤害再 +6；建筑费用 × 0.9',
+    effects: { towerDmgFlat: 6, buildCostMults: [0.9] } },
   { id: 'co_fortress', nation: 'commerce', column: '重工之道', tier: 3, name: '钢铁要塞', icon: '🏰', cost: 6, requires: 'co_steel',
-    desc: '城墙吸收再 +20/级，箭塔伤害再 +10' },
+    desc: '城墙吸收再 +20/级，箭塔伤害再 +10',
+    effects: { towerDmgFlat: 10, wallAbsorbFlat: 20 } },
   // -- 雇佣之道 --
   { id: 'co_market', nation: 'commerce', column: '雇佣之道', tier: 1, name: '繁荣市集', icon: '🏪', cost: 2,
-    desc: '每位采矿村民金币产出再 +1' },
+    desc: '每位采矿村民金币产出再 +1',
+    effects: { gatherFlat: { gold: 1 } } },
   { id: 'co_mercenary', nation: 'commerce', column: '雇佣之道', tier: 2, name: '雇佣兵制', icon: '💰', cost: 4, requires: 'co_market',
-    desc: '训练士兵只花金币（免食物），费用 -15%' },
+    desc: '训练士兵只花金币（免食物），费用 -15%',
+    effects: { flags: { mercenary: true } } },
   { id: 'co_war_economy', nation: 'commerce', column: '雇佣之道', tier: 3, name: '战争经济', icon: '👑', cost: 6, requires: 'co_mercenary',
-    desc: '战斗缴获金币 +50%，荣耀点 +1/胜' },
+    desc: '战斗缴获金币 +50%，荣耀点 +1/胜',
+    effects: { lootMults: [1.5], honorPerWin: 1 } },
 ]
 
 export function getSkillsForNation(nation: NationId): SkillDef[] {

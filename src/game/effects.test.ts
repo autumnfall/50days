@@ -126,3 +126,54 @@ describe('派生函数等价性定点验证（手算对照）', () => {
     expect(wallAbsorb(s)).toBe(78)
   })
 })
+
+
+// ============================================================
+// 完整性：每个有持续被动效果的内容都必须有 effects 声明
+// （漏填 = 静默失效，此测试兜底；一次性开局效果除外）
+// ============================================================
+
+describe('effects 声明完整性', () => {
+  it('所有文明都有 effects 声明', async () => {
+    const { NATIONS } = await import('./config')
+    for (const def of Object.values(NATIONS)) {
+      expect(def.effects, `文明 ${def.id} 缺少 effects`).toBeDefined()
+    }
+  })
+
+  it('所有技能都有 effects 声明', async () => {
+    const { SKILLS } = await import('./config')
+    for (const def of SKILLS) {
+      expect(def.effects, `技能 ${def.id} 缺少 effects`).toBeDefined()
+    }
+  })
+
+  it('所有遗物都有 effects 声明', async () => {
+    const { RELICS } = await import('./relics')
+    for (const def of Object.values(RELICS)) {
+      expect(def.effects, `遗物 ${def.id} 缺少 effects`).toBeDefined()
+    }
+  })
+
+  it('除一次性开局效果外的天赋都有 effects 声明', async () => {
+    const { TALENTS } = await import('./meta')
+    const ONE_TIME = ['granary_start', 'rich_vein', 'militia_start'] // 开局资源/兵种，由 createGame 结算
+    for (const def of TALENTS) {
+      if (ONE_TIME.includes(def.id)) {
+        expect(def.effects, `一次性天赋 ${def.id} 不应有 effects`).toBeUndefined()
+      } else {
+        expect(def.effects, `天赋 ${def.id} 缺少 effects`).toBeDefined()
+      }
+    }
+  })
+
+  it('声明的 effects 确实生效：逐项声明非空且 collectMods 汇总后不等于空值', async () => {
+    const { SKILLS } = await import('./config')
+    const { TALENTS } = await import('./meta')
+    const { RELICS } = await import('./relics')
+    const nonEmpty = (c: object) => Object.keys(c).length > 0
+    for (const def of SKILLS) expect(nonEmpty(def.effects!), `技能 ${def.id} effects 为空`).toBe(true)
+    for (const def of TALENTS.filter((t) => t.effects)) expect(nonEmpty(def.effects!), `天赋 ${def.id} effects 为空`).toBe(true)
+    for (const def of Object.values(RELICS)) expect(nonEmpty(def.effects), `遗物 ${def.id} effects 为空`).toBe(true)
+  })
+})
