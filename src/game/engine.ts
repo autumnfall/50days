@@ -3,13 +3,24 @@
 // ============================================================
 
 import {
-  BASE_UNIT_IDS, BUILDINGS, CONFIG, HONOR_EXCHANGE_BASE, SKILLS, TOWER_DMG, UNITS, WALL_ABSORB_PER,
+  BASE_UNIT_IDS, BLESSINGS, BUILDINGS, CONFIG, HONOR_EXCHANGE_BASE, SKILLS, TOWER_DMG, UNITS, WALL_ABSORB_PER,
   getWave, pickRandomEvent, scaleEvent,
   type BaseUnitId, type BuildingId, type GameEvent, type NationId, type ResourceId, type UnitId, type UpgradeId, type WaveInfo,
 } from './config'
-import { DUNGEON_FLOORS, rollModifiers, type DungeonModifier } from './dungeon'
+import { DUNGEON_FLOORS, DUNGEON_MODIFIERS, rollModifiers, type DungeonModifier } from './dungeon'
+import { nextRandom, randomSeed } from './rng'
 
 export type Phase = 'start' | 'playing' | 'battle' | 'dungeon_result' | 'victory' | 'defeat'
+
+export type GameMode = 'classic' | 'rogue'
+
+/** 肉鸽模式「无尽远征」的 run 状态 */
+export interface RogueRun {
+  /** 初始种子（展示/同 seed 重开用） */
+  seed: number
+  /** 已获得的遗物 id（局内持久被动） */
+  relics: string[]
+}
 
 export interface LogEntry {
   day: number
@@ -46,6 +57,8 @@ export interface BattleReport {
   buildingLost: string | null
   lootGold: number
   honorGained: number
+  /** 肉鸽模式：本波附带的战场词条 */
+  modifier?: DungeonModifier | null
 }
 
 export interface Income {
@@ -58,6 +71,11 @@ export interface Income {
 
 export interface GameState {
   phase: Phase
+  mode: GameMode
+  /** 种子化 PRNG 当前状态（所有局内随机的唯一随机源，可序列化） */
+  rng: number
+  /** 肉鸽模式 run 状态（经典模式为 null） */
+  run: RogueRun | null
   nation: NationId | null
   day: number
   resources: Record<ResourceId, number>
@@ -97,18 +115,30 @@ export interface GameState {
 
 // ---------------- 初始化 ----------------
 
-export function createGame(talentIds: string[] = []): GameState {
+export interface CreateGameOptions {
+  mode?: GameMode
+  seed?: number
+}
+
+export function createGame(talentIds: string[] = [], opts: CreateGameOptions = {}): GameState {
+  const mode: GameMode = opts.mode ?? 'classic'
+  const seed = opts.seed ?? randomSeed()
   const has = (id: string) => talentIds.includes(id)
   const resources: Record<ResourceId, number> = { food: CONFIG.start.food, wood: CONFIG.start.wood, gold: CONFIG.start.gold }
   if (has('granary_start')) resources.food += 20 // 天赋：余粮
   if (has('rich_vein')) { resources.wood += 15; resources.gold += 10 } // 天赋：富矿
   const soldiers: Record<UnitId, number> = { militia: has('militia_start') ? 2 : 0, archer: 0, knight: 0, warlord: 0 }
-  const log: GameState['log'] = [{ day: 1, text: '你带领族人来到这片山谷，建立营地。坚守 50 天，等待王国援军！', kind: 'info' }]
+  const log: GameState['log'] = [{ day: 1, text: mode === 'rogue'
+    ? '你带领族人踏上无尽远征。黑暗将永无止境地涌来——没有援军，尽可能坚守更久！'
+    : '你带领族人来到这片山谷，建立营地。坚守 50 天，等待王国援军！', kind: 'info' }]
   if (talentIds.length > 0) {
     log.push({ day: 1, text: `🌟 ${talentIds.length} 项局外天赋已生效，传承之力护佑着你`, kind: 'skill' })
   }
   return {
     phase: 'start',
+    mode,
+    rng: seed,
+    run: mode === 'rogue' ? { seed, relics: [] } : null,
     nation: null,
     day: 1,
     resources,
@@ -158,6 +188,29 @@ export function hasSkill(s: GameState, id: string): boolean {
 /** 是否激活了某局外天赋 */
 export function hasTalent(s: GameState, id: string): boolean {
   return s.talents.includes(id)
+}
+
+/** 是否拥有某遗物（肉鸽模式局内持久被动） */
+export function hasRelic(s: GameState, id: string): boolean {
+  return s.run?.relics.includes(id) ?? false
+}
+
+// ---------------- 种子化随机源 ----------------
+
+/**
+ * 返回一个消耗 s.rng 的随机函数。
+ * 使用方式：`const rnd = rngOf(() => ns, (v) => { ns = v })` 太繁琐，
+ * 故直接在需要的函数内用 makeRng 模式：
+ *   let rngState = s.rng
+ *   const rnd = () => { const r = nextRandom(rngState); rngState = r.state; return r.value }
+ *   …结算后把 rngState 写回 state。
+ */
+function makeRng(initial: number): { rnd: () => number; getState: () => number } {
+  let state = initial
+  return {
+    rnd: () => { const r = nextRandom(state); state = r.state; return r.value },
+    getState: () => state,
+  }
 }
 
 /** 是否拥有任意 T3 技能（解锁终局机制） */
@@ -284,6 +337,8 @@ function baseUnitAtk(s: GameState, id: BaseUnitId): number {
   atk += armyAtk[id] * s.upgrades.army
   // 局外天赋：操练
   if (hasTalent(s, 'drill')) atk += 1
+  // 遗物：磨刀石
+  if (hasRelic(s, 'whetstone')) atk = Math.round(atk * 1.1)
   return atk
 }
 
@@ -325,6 +380,8 @@ export function towerDmg(s: GameState): number {
   // 局外天赋：射术 + 箭阵（每座防御建筑 +2）
   if (hasTalent(s, 'marksman')) dmg += 4
   if (hasTalent(s, 'arrow_volley')) dmg += 2 * (s.buildings.wall + s.buildings.tower)
+  // 遗物：长弓图纸
+  if (hasRelic(s, 'longbow')) dmg = Math.round(dmg * 1.25)
   return dmg
 }
 
@@ -336,6 +393,8 @@ export function wallAbsorb(s: GameState): number {
   ab += 7 * s.upgrades.def
   // 局外天赋：加固
   if (hasTalent(s, 'reinforce')) ab += 10
+  // 遗物：堡垒基石
+  if (hasRelic(s, 'thick_walls')) ab = Math.round(ab * 1.2)
   return ab
 }
 
@@ -429,6 +488,12 @@ export function buildCost(s: GameState, id: BuildingId): Partial<Record<Resource
     )
   }
   if (hasSkill(s, 'co_steel')) {
+    cost = Object.fromEntries(
+      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * 0.9))]),
+    )
+  }
+  // 遗物：坚固图纸
+  if (hasRelic(s, 'sturdy_plans')) {
     cost = Object.fromEntries(
       (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * 0.9))]),
     )
@@ -579,6 +644,8 @@ export function endTurn(s: GameState): GameState {
   }
   // 生生不息：食物采集总产出 +25%
   if (hasSkill(ns, 'ag_abundance')) income.food = Math.floor(income.food * 1.25)
+  // 遗物：丰收图腾
+  if (hasRelic(ns, 'harvest_totem')) income.food = Math.floor(income.food * 1.15)
   // 商路关税：金币采集 +20%
   if (hasSkill(ns, 'co_tariff')) income.gold = Math.floor(income.gold * 1.2)
   // 局外天赋：义勇 —— 每名民兵各资源 +2（固定值，不吃任何百分比加成）
@@ -593,8 +660,9 @@ export function endTurn(s: GameState): GameState {
   ns.resources.wood += income.wood
   ns.resources.gold += income.gold
 
-  // 四方商队/黄金水道：金币存量利息（收入入账后）
-  const interestRate = hasSkill(ns, 'co_goldwater') ? 0.05 : hasSkill(ns, 'co_caravan') ? 0.02 : 0
+  // 四方商队/黄金水道：金币存量利息（收入入账后）；遗物：商人护符
+  let interestRate = hasSkill(ns, 'co_goldwater') ? 0.05 : hasSkill(ns, 'co_caravan') ? 0.02 : 0
+  if (hasRelic(ns, 'merchant_charm')) interestRate += 0.03
   if (interestRate > 0 && ns.resources.gold > 0) {
     const interest = Math.floor(ns.resources.gold * interestRate)
     if (interest > 0) {
@@ -613,6 +681,8 @@ export function endTurn(s: GameState): GameState {
     // 谷仓少饿死 1 人 + 人丁兴旺再少 1 人
     if (hasSkill(ns, 'ag_granary') && deficit > 0) deficit -= 1
     if (hasSkill(ns, 'ag_population') && deficit > 0) deficit -= 1
+    // 遗物：神圣谷种 —— 饥荒饿死人数减半
+    if (hasRelic(ns, 'sacred_grain') && deficit > 0) deficit = Math.ceil(deficit / 2)
     let remaining = deficit
     const villagerDeaths = Math.min(ns.villagers, remaining)
     ns.villagers -= villagerDeaths
@@ -637,23 +707,32 @@ export function endTurn(s: GameState): GameState {
   const newDay = ns.day + 1
   ns = { ...ns, day: newDay }
 
-  // 4. 随机事件（挂起缩放副本，等待玩家抉择）
-  const ev = pickRandomEvent(newDay, Math.random, { traderBoost: hasSkill(ns, 'co_caravan') })
-  if (ev) {
-    ns = { ...ns, pendingEvent: { event: scaleEvent(ev, newDay) } }
+  // 4. 随机事件 / 远征祝福（挂起缩放副本，等待玩家抉择）
+  const turnRng = makeRng(ns.rng)
+  if (ns.mode === 'rogue' && newDay % CONFIG.rogue.blessingInterval === 0) {
+    // 肉鸽模式：每 3 天一次「远征祝福」三选一（祝福日不再掷随机事件）
+    ns = { ...ns, rng: turnRng.getState() }
+    ns = offerBlessing(ns)
+  } else {
+    const ev = pickRandomEvent(newDay, turnRng.rnd, { traderBoost: hasSkill(ns, 'co_caravan') })
+    ns = { ...ns, rng: turnRng.getState() }
+    if (ev) {
+      ns = { ...ns, pendingEvent: { event: scaleEvent(ev, newDay) } }
+    }
   }
 
-  // 5. 流浪者来投（生生不息 → 每 2 天；招贤纳士 → 每次 +2 人）
+  // 5. 流浪者来投（生生不息 → 每 2 天；招贤纳士 → 每次 +2 人；遗物：拓荒者之靴 +1）
   const wanderInterval = hasSkill(ns, 'ag_abundance') ? 2 : CONFIG.wandererInterval
   if (newDay % wanderInterval === 0 && population(ns) < popCap(ns) && ns.resources.food > 0) {
-    const count = Math.min(hasSkill(ns, 'ag_recruit') ? 2 : 1, popCap(ns) - population(ns))
+    const base = (hasSkill(ns, 'ag_recruit') ? 2 : 1) + (hasRelic(ns, 'pioneer_boots') ? 1 : 0)
+    const count = Math.min(base, popCap(ns) - population(ns))
     if (count > 0) {
       ns = { ...ns, villagers: ns.villagers + count, log: pushLog(ns, `🚶 流浪者路过村庄，决定留下来（+${count} 村民）`, 'info') }
     }
   }
 
-  // 5b. 局外天赋：春播秋收 —— 每 10 天农场自动 +1 级（免费，可突破建造上限）
-  if (hasTalent(ns, 'spring_harvest') && newDay % 10 === 0 && newDay < CONFIG.totalDays) {
+  // 5b. 局外天赋：春播秋收 —— 每 10 天农场自动 +1 级（免费，可突破建造上限；无尽远征中不限天数）
+  if (hasTalent(ns, 'spring_harvest') && newDay % 10 === 0 && (ns.mode === 'rogue' || newDay < CONFIG.totalDays)) {
     ns = {
       ...ns,
       buildings: { ...ns.buildings, farm: ns.buildings.farm + 1 },
@@ -662,7 +741,10 @@ export function endTurn(s: GameState): GameState {
   }
 
   // 6. 波次判定
-  if (newDay >= CONFIG.totalDays) {
+  if (ns.mode === 'rogue') {
+    ns = resolveRogueWave(ns, newDay, turnRng)
+    if (ns.phase === 'defeat') return ns
+  } else if (newDay >= CONFIG.totalDays) {
     // 终局 Boss：最后一天必定遭遇，固定第 20 波难度
     const boss = finalBossWave()
     ns = { ...ns, omen: false, log: pushLog(ns, `💀 黑暗大军压境！终局决战开始！`, 'battle') }
@@ -672,7 +754,10 @@ export function endTurn(s: GameState): GameState {
   } else {
     // 随机波次：第 3 天起每天判定，概率 20% 逐日递增
     const chance = waveChanceForDay(ns, newDay)
-    if (chance > 0 && Math.random() < chance) {
+    const waveRng = makeRng(ns.rng)
+    const waveRoll = waveRng.rnd()
+    ns = { ...ns, rng: waveRng.getState() }
+    if (chance > 0 && waveRoll < chance) {
       const wave = getWave(ns.wavesFaced + 1)
       if (ns.omen) {
         wave.count = Math.round(wave.count * 1.25)
@@ -690,11 +775,86 @@ export function endTurn(s: GameState): GameState {
     }
   }
 
-  // 7. 胜利判定（必须击败终局 Boss）
-  if (newDay > CONFIG.totalDays && ns.defeatedFinalBoss) {
+  // 7. 胜利判定（必须击败终局 Boss；无尽远征没有胜利终点）
+  if (ns.mode !== 'rogue' && newDay > CONFIG.totalDays && ns.defeatedFinalBoss) {
     return { ...ns, phase: 'victory', log: pushLog(ns, '🎉 黑暗大军被击溃！王国的援军抵达了！你守住了 50 天！', 'good') }
   }
   return ns
+}
+
+// ---------------- 肉鸽模式：远征祝福 & 无尽波次 ----------------
+
+/** 从祝福池加权抽 3 个不重复祝福（排除已拥有遗物的祝福），组装成挂起事件 */
+function offerBlessing(s: GameState): GameState {
+  const { rnd, getState } = makeRng(s.rng)
+  const pool = BLESSINGS.filter((b) => !b.effect.relic || !hasRelic(s, b.effect.relic))
+  const picks: typeof BLESSINGS = []
+  const candidates = [...pool]
+  while (picks.length < 3 && candidates.length > 0) {
+    const total = candidates.reduce((sum, b) => sum + b.weight, 0)
+    let roll = rnd() * total
+    let idx = 0
+    for (let i = 0; i < candidates.length; i++) {
+      roll -= candidates[i].weight
+      if (roll <= 0) { idx = i; break }
+    }
+    picks.push(candidates[idx])
+    candidates.splice(idx, 1)
+  }
+  let ns: GameState = { ...s, rng: getState() }
+  if (picks.length === 0) return ns
+  const event: GameEvent = {
+    id: 'blessing', icon: '🎁', title: '远征祝福', kind: 'good', weight: 1,
+    text: '远征途中，神秘的力量向你伸出橄榄枝。择一祝福，它将指引你走得更远。',
+    choices: picks.map((b) => ({ id: b.id, label: `${b.icon} ${b.name}`, desc: b.desc, effect: b.effect })),
+  }
+  ns = { ...ns, pendingEvent: { event } }
+  return { ...ns, log: pushLog(ns, '🎁 远征祝福降临，请择一而行', 'event') }
+}
+
+/** 肉鸽模式的强化 Boss 波：强度随天数提升（第 25 天 ≈ 第 13 波强度，第 50 天 ≈ 第 25 波） */
+export function rogueBossWave(day: number, wavesFaced: number): WaveInfo {
+  const w = getWave(Math.max(wavesFaced + 1, Math.ceil(day * CONFIG.rogue.bossWavePerDay)))
+  return { ...w, name: '黑暗领主 · ' + w.name, icon: '💀' }
+}
+
+/** 无尽远征的波次判定：每 bossInterval 天必来强化 Boss，平时沿用随机波次并附带战场词条 */
+function resolveRogueWave(s: GameState, newDay: number, turnRng: { rnd: () => number; getState: () => number }): GameState {
+  let ns = s
+  const isBossDay = newDay % CONFIG.rogue.bossInterval === 0
+  const chance = waveChanceForDay(ns, newDay)
+  const roll = turnRng.rnd()
+  ns = { ...ns, rng: turnRng.getState() }
+  if (!isBossDay && !(chance > 0 && roll < chance)) return ns
+
+  let wave = isBossDay ? rogueBossWave(newDay, ns.wavesFaced) : getWave(ns.wavesFaced + 1)
+  // 强度随天数微增，保证难度曲线最终超过玩家成长（最终必败）
+  const scale = 1 + newDay * CONFIG.rogue.dayScaling
+  wave = {
+    ...wave,
+    count: Math.round(wave.count * scale),
+    hpEach: Math.round(wave.hpEach * scale),
+    atkEach: Math.round(wave.atkEach * scale * 10) / 10,
+    lootGold: Math.round(wave.lootGold * scale),
+  }
+  if (ns.omen) {
+    wave = { ...wave, count: Math.round(wave.count * 1.25), hpEach: Math.round(wave.hpEach * 1.2) }
+  }
+  // 战场词条：Boss 波从敌增益池抽取，常规波从全部词条抽取
+  const modRng = makeRng(ns.rng)
+  const modPool = isBossDay ? DUNGEON_MODIFIERS.filter((m) => m.type === 'enemy_buff') : DUNGEON_MODIFIERS
+  const modifier = modPool[Math.floor(modRng.rnd() * modPool.length)]
+  ns = {
+    ...ns,
+    rng: modRng.getState(),
+    wavesFaced: ns.wavesFaced + 1,
+    lastWaveDay: newDay,
+    omen: false,
+    log: pushLog(ns, isBossDay
+      ? `💀 黑暗领主亲率大军压境！（${modifier.icon} ${modifier.name}：${modifier.desc}）`
+      : `📯 敌情突现！第 ${ns.wavesFaced + 1} 波敌军来袭！（战场词条：${modifier.icon} ${modifier.name}）`, 'battle'),
+  }
+  return resolveBattle(ns, wave, modifier)
 }
 
 // ---------------- 收入预览 ----------------
@@ -720,6 +880,7 @@ export function previewTurnIncome(s: GameState): TurnPreview {
   let woodGather = s.assignment.wood * woodPer
   let goldGather = s.assignment.gold * goldPer
   if (hasSkill(s, 'ag_abundance')) foodGather = Math.floor(foodGather * 1.25)
+  if (hasRelic(s, 'harvest_totem')) foodGather = Math.floor(foodGather * 1.15)
   if (hasSkill(s, 'co_tariff')) goldGather = Math.floor(goldGather * 1.2)
   // 局外天赋：义勇（固定值，不吃百分比加成）
   if (hasTalent(s, 'militia_economy') && s.soldiers.militia > 0) {
@@ -730,7 +891,8 @@ export function previewTurnIncome(s: GameState): TurnPreview {
   }
 
   const goldAfterGather = s.resources.gold + goldGather
-  const interestRate = hasSkill(s, 'co_goldwater') ? 0.05 : hasSkill(s, 'co_caravan') ? 0.02 : 0
+  let interestRate = hasSkill(s, 'co_goldwater') ? 0.05 : hasSkill(s, 'co_caravan') ? 0.02 : 0
+  if (hasRelic(s, 'merchant_charm')) interestRate += 0.03
   const interest = interestRate > 0 && goldAfterGather > 0 ? Math.floor(goldAfterGather * interestRate) : 0
 
   const upkeep = foodUpkeep(s)
@@ -789,21 +951,30 @@ export function applyEventChoice(s: GameState, choiceId: string): GameState {
   if (e.honor) ns.honor = Math.max(0, ns.honor + e.honor)
   if (e.omen) ns.omen = true
 
+  // 获得遗物（肉鸽模式，去重）
+  let relicNote = ''
+  if (e.relic && ns.run && !ns.run.relics.includes(e.relic)) {
+    ns = { ...ns, run: { ...ns.run, relics: [...ns.run.relics, e.relic] } }
+    relicNote = ` 🎁 遗物已生效，将持续整场远征！`
+  }
+
   // 随机建筑损毁（祈祷天晴等）
   let extraNote = ''
-  if (e.randomBuildingLoss && Math.random() < e.randomBuildingLoss) {
+  const evtRng = makeRng(ns.rng)
+  if (e.randomBuildingLoss && evtRng.rnd() < e.randomBuildingLoss) {
     const candidates = (Object.keys(ns.buildings) as BuildingId[]).filter((b) => ns.buildings[b] > 0)
     if (candidates.length) {
-      const target = candidates[Math.floor(Math.random() * candidates.length)]
+      const target = candidates[Math.floor(evtRng.rnd() * candidates.length)]
       ns = { ...ns, buildings: { ...ns.buildings, [target]: ns.buildings[target] - 1 } }
       extraNote = ` 💥 ${BUILDINGS[target].name} 在风雨中受损 -1 级！`
     }
   }
+  ns = { ...ns, rng: evtRng.getState() }
 
   ns = { ...ns, pendingEvent: null }
   return {
     ...ns,
-    log: pushLog(ns, `${event.icon}【${event.title}】你选择了「${choice.label}」→ ${choice.desc}${extraNote}`, 'event'),
+    log: pushLog(ns, `${event.icon}【${event.title}】你选择了「${choice.label}」→ ${choice.desc}${relicNote}${extraNote}`, 'event'),
   }
 }
 
@@ -823,24 +994,44 @@ function fixAssignment(s: GameState): Record<ResourceId, number> {
 
 interface Fighter { hp: number; atk: number }
 
-function resolveBattle(s: GameState, wave: WaveInfo): GameState {
+function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier | null = null): GameState {
+  const battleRng = makeRng(s.rng)
+  const rnd = battleRng.rnd
   let ns: GameState = { ...s, log: pushLog(s, `⚔️ 第 ${wave.wave} 波敌人来袭：${wave.count} 只${wave.name}！`, 'battle') }
 
-  const enemies: Fighter[] = Array.from({ length: wave.count }, () => ({ hp: wave.hpEach, atk: wave.atkEach }))
+  // ---- 战场词条：属性调整（肉鸽模式）----
+  const modId = modifier?.id
+  let enemyCount = wave.count
+  let enemyHp = wave.hpEach
+  let enemyAtk = wave.atkEach
+  if (modId === 'thick_skin') enemyHp = Math.round(enemyHp * 1.3)
+  if (modId === 'berserk') enemyAtk = Math.round(enemyAtk * 1.25 * 10) / 10
+  if (modId === 'swarm') enemyCount = Math.round(enemyCount * 1.4)
+  const playerAtkMult = modId === 'weakened' ? 0.8 : 1
+  const playerHpMult = modId === 'fragile' ? 0.75 : 1
+  const hasThorns = modId === 'thorns'
+  const hasFrenzy = modId === 'frenzy'
+  const hasChaos = modId === 'chaos'
+
+  const enemies: Fighter[] = Array.from({ length: enemyCount }, () => ({ hp: enemyHp, atk: enemyAtk }))
   const units: { id: UnitId; hp: number; atk: number }[] = []
   ;(['warlord', 'knight', 'archer', 'militia'] as UnitId[]).forEach((id) => {
-    for (let i = 0; i < ns.soldiers[id]; i++) units.push({ id, hp: unitHp(ns, id), atk: unitAtk(ns, id) })
+    for (let i = 0; i < ns.soldiers[id]; i++) {
+      units.push({ id, hp: Math.round(unitHp(ns, id) * playerHpMult), atk: Math.round(unitAtk(ns, id) * playerAtkMult) })
+    }
   })
   let wallHp = ns.buildings.wall * wallAbsorb(ns)
   const towers = ns.buildings.tower
   const tDmg = towerDmg(ns)
-  const firstRoundBonus = hasSkill(ns, 'mi_warhorn') ? 1.4 : 1
+  let firstRoundBonus = hasSkill(ns, 'mi_warhorn') ? 1.4 : 1
+  // 遗物：战鼓
+  if (hasRelic(ns, 'war_drum')) firstRoundBonus *= 1.25
   const bloodlust = hasSkill(ns, 'mi_bloodlust')
   const militiaAll = hasSkill(ns, 'ag_allmilitia')
   const discipline = hasSkill(ns, 'mi_discipline')
 
   const report: BattleReport = {
-    wave,
+    wave: { ...wave, count: enemyCount, hpEach: enemyHp, atkEach: enemyAtk },
     rounds: [],
     won: false,
     breached: false,
@@ -853,6 +1044,7 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
     buildingLost: null,
     lootGold: 0,
     honorGained: 0,
+    modifier,
   }
 
   const hasDefenders = units.length > 0 || towers > 0 || wallHp > 0
@@ -865,15 +1057,17 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
       // 我方伤害 = 士兵 + 箭塔 + 全民皆兵（村民协防）+ 嗜血
       let playerDmg = units.reduce((sum, u) => sum + u.atk, 0) + towers * tDmg + bloodlustStacks
       if (militiaAll) playerDmg += ns.villagers * 2
-      playerDmg = Math.round(playerDmg * (0.9 + Math.random() * 0.2) * (round === 1 ? firstRoundBonus : 1))
+      playerDmg = Math.round(playerDmg * (0.9 + rnd() * 0.2) * (round === 1 ? firstRoundBonus : 1))
+      if (hasChaos && round === 1) playerDmg = Math.round(playerDmg * 0.5)
       let enemyDmg = enemies.reduce((sum, e) => sum + e.atk, 0)
-      enemyDmg = Math.round(enemyDmg * (0.9 + Math.random() * 0.2) * (discipline ? 0.9 : 1))
+      if (hasFrenzy) enemyDmg *= 1 + kills * 0.05
+      enemyDmg = Math.round(enemyDmg * (0.9 + rnd() * 0.2) * (discipline ? 0.9 : 1))
 
       // 我方伤害 → 击杀敌人
       let dmg = playerDmg
       const before = enemies.length
       while (dmg > 0 && enemies.length) {
-        const idx = Math.floor(Math.random() * enemies.length)
+        const idx = Math.floor(rnd() * enemies.length)
         const e = enemies[idx]
         const dealt = Math.min(dmg, e.hp)
         e.hp -= dealt
@@ -887,6 +1081,20 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
         if (newStacks > bloodlustStacks) bloodlustStacks = newStacks
       }
 
+      // 荆棘反伤（战场词条）
+      let thornNote: string | undefined
+      if (hasThorns && playerDmg > 0) {
+        let thornDmg = Math.round(playerDmg * 0.15)
+        while (thornDmg > 0 && units.length) {
+          const idx = Math.floor(rnd() * units.length)
+          const u = units[idx]
+          const dealt = Math.min(thornDmg, u.hp)
+          u.hp -= dealt
+          thornDmg -= dealt
+          if (u.hp <= 0) { units.splice(idx, 1); thornNote = '🌿 荆棘反伤！' }
+        }
+      }
+
       // 敌方伤害 → 城墙 → 士兵
       let note: string | undefined
       dmg = enemyDmg
@@ -897,7 +1105,7 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
         if (wallHp <= 0) note = '🧱 城墙被摧毁！'
       }
       while (dmg > 0 && units.length) {
-        const idx = Math.floor(Math.random() * units.length)
+        const idx = Math.floor(rnd() * units.length)
         const u = units[idx]
         const dealt = Math.min(dmg, u.hp)
         u.hp -= dealt
@@ -911,7 +1119,7 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
         enemyDmg,
         enemiesLeft: enemies.length,
         playerLeft: units.length,
-        note: note ?? (bloodlust && roundKills > 0 && bloodlustStacks > 0 ? `🔥 嗜血 +${bloodlustStacks}` : undefined),
+        note: note ?? thornNote ?? (bloodlust && roundKills > 0 && bloodlustStacks > 0 ? `🔥 嗜血 +${bloodlustStacks}` : undefined),
       })
     }
   }
@@ -932,6 +1140,17 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
       if (revived > 0) {
         survivors[id] += revived
         report.soldiersRevived[id] = revived
+      }
+    })
+  }
+  // 遗物：急救包 —— 再挽回阵亡数的 20%（与英魂庇护叠乘结算）
+  if (hasRelic(ns, 'field_medic')) {
+    ;(['militia', 'archer', 'knight', 'warlord'] as UnitId[]).forEach((id) => {
+      const lost = report.soldiersLost[id] ?? 0
+      const saved = Math.floor(lost * 0.2)
+      if (saved > 0) {
+        survivors[id] += saved
+        report.soldiersRevived[id] = (report.soldiersRevived[id] ?? 0) + saved
       }
     })
   }
@@ -962,6 +1181,8 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
       honor += 1
     }
     if (hasSkill(ns, 'co_goldwater')) loot = Math.round(loot * 1.25)
+    // 遗物：点金手
+    if (hasRelic(ns, 'golden_touch')) loot = Math.round(loot * 1.3)
     report.lootGold = loot
     report.honorGained = honor
     ns = {
@@ -969,7 +1190,11 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
       resources: { ...ns.resources, gold: ns.resources.gold + loot },
       honor: ns.honor + honor,
     }
-    ns = { ...ns, log: pushLog(ns, `🏆 击退了${wave.name}！缴获 ${loot} 金币、${honor} 荣耀`, 'good') }
+    // 遗物：战旗 —— 每击退一波 +1 民兵
+    if (hasRelic(ns, 'war_banner')) {
+      ns = { ...ns, soldiers: { ...ns.soldiers, militia: ns.soldiers.militia + 1 } }
+    }
+    ns = { ...ns, log: pushLog(ns, `🏆 击退了${wave.name}！缴获 ${loot} 金币、${honor} 荣耀${hasRelic(ns, 'war_banner') ? '，战旗感召 1 名民兵加入' : ''}`, 'good') }
   } else {
     // 被攻破：残敌劫掠村庄
     const raiders = enemies.length
@@ -981,7 +1206,7 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
     // 拆毁一座建筑
     const candidates = (Object.keys(ns.buildings) as BuildingId[]).filter((b) => ns.buildings[b] > 0)
     if (candidates.length) {
-      const target = candidates[Math.floor(Math.random() * candidates.length)]
+      const target = candidates[Math.floor(rnd() * candidates.length)]
       ns = { ...ns, buildings: { ...ns.buildings, [target]: ns.buildings[target] - 1 } }
       report.buildingLost = `${BUILDINGS[target].icon} ${BUILDINGS[target].name}`
     }
@@ -997,6 +1222,7 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
   if (ns.villagers + soldierCount(ns) <= 0) {
     return {
       ...ns,
+      rng: battleRng.getState(),
       phase: 'defeat',
       defeatReason: `第 ${wave.wave} 波${wave.name}血洗了村庄，无人生还。`,
       battle: report,
@@ -1004,7 +1230,7 @@ function resolveBattle(s: GameState, wave: WaveInfo): GameState {
     }
   }
 
-  return { ...ns, battle: report, phase: 'battle' }
+  return { ...ns, rng: battleRng.getState(), battle: report, phase: 'battle' }
 }
 
 // ---------------- 地牢 ----------------
@@ -1021,9 +1247,11 @@ export interface DungeonResult {
 }
 
 function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; result: DungeonResult } {
+  const dungeonRng = makeRng(s.rng)
+  const rnd = dungeonRng.rnd
   const floorDef = DUNGEON_FLOORS[floor - 1]
   const wave = getWave(floorDef.wave)
-  const modifiers = rollModifiers(floor)
+  const modifiers = rollModifiers(floor, rnd)
 
   let enemyCount = wave.count
   let enemyHp = wave.hpEach
@@ -1089,7 +1317,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
       for (const u of units) unitDmgByType[u.id] = (unitDmgByType[u.id] ?? 0) + u.atk
       if (militiaAll) unitDmgByType.militia = (unitDmgByType.militia ?? 0) + s.villagers * 2
       let playerDmg = Object.values(unitDmgByType).reduce((a, b) => a + b!, 0) + bloodlustStacks
-      const rngMult = 0.9 + Math.random() * 0.2
+      const rngMult = 0.9 + rnd() * 0.2
       playerDmg = Math.round(playerDmg * rngMult)
       if (round === 1) playerDmg = Math.round(playerDmg * firstRoundBonus)
       if (hasChaos && round === 1) playerDmg = Math.round(playerDmg * 0.5)
@@ -1104,7 +1332,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
       const unitKillsByType: Partial<Record<UnitId, number>> = {}
       let dmg = playerDmg
       while (dmg > 0 && enemies.length) {
-        const idx = Math.floor(Math.random() * enemies.length)
+        const idx = Math.floor(rnd() * enemies.length)
         const e = enemies[idx]
         const dealt = Math.min(dmg, e.hp)
         e.hp -= dealt
@@ -1115,7 +1343,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
           const contributors = (Object.keys(unitDmgByType) as UnitId[]).filter((k) => (unitDmgByType[k] ?? 0) > 0)
           if (contributors.length > 0) {
             const totalContrib = contributors.reduce((a, k) => a + unitDmgByType[k]!, 0)
-            let roll = Math.random() * totalContrib
+            let roll = rnd() * totalContrib
             for (const k of contributors) {
               roll -= unitDmgByType[k]!
               if (roll <= 0) { unitKillsByType[k] = (unitKillsByType[k] ?? 0) + 1; break }
@@ -1136,7 +1364,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
         const thorn = Math.round(playerDmg * 0.15)
         let thornDmg = thorn
         while (thornDmg > 0 && units.length) {
-          const idx = Math.floor(Math.random() * units.length)
+          const idx = Math.floor(rnd() * units.length)
           const u = units[idx]
           const dealt = Math.min(thornDmg, u.hp)
           u.hp -= dealt
@@ -1149,13 +1377,13 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
       let enemyFrenzyMult = 1
       if (hasFrenzy) enemyFrenzyMult = 1 + kills * 0.05
       let enemyDmg = enemies.reduce((sum, e) => sum + e.atk, 0) * enemyFrenzyMult
-      enemyDmg = Math.round(enemyDmg * (0.9 + Math.random() * 0.2) * (discipline ? 0.9 : 1))
+      enemyDmg = Math.round(enemyDmg * (0.9 + rnd() * 0.2) * (discipline ? 0.9 : 1))
 
       // ---- 我方伤亡统计（英魂庇护前） ----
       const beforeUnits = units.map((u) => ({ ...u }))
       dmg = enemyDmg
       while (dmg > 0 && units.length) {
-        const idx = Math.floor(Math.random() * units.length)
+        const idx = Math.floor(rnd() * units.length)
         const u = units[idx]
         const dealt = Math.min(dmg, u.hp)
         u.hp -= dealt
@@ -1206,7 +1434,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
 
   report.won = enemies.length === 0
 
-  let ns: GameState = { ...s, soldiers: survivors }
+  let ns: GameState = { ...s, rng: dungeonRng.getState(), soldiers: survivors }
 
   if (report.won) {
     let honor = floorDef.honor

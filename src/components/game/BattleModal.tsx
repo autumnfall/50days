@@ -50,6 +50,13 @@ export default function BattleModal({ report, onClose }: { report: BattleReport;
           <p className="mt-1 text-xs text-stone-400">
             第 {wave.wave} 波 · {wave.icon} {wave.name} × {startEnemies}
           </p>
+          {report.modifier && (
+            <div className="mx-auto mt-2 inline-flex items-center gap-1.5 rounded-lg border border-purple-700/50 bg-purple-950/40 px-2.5 py-1 text-[11px] text-purple-200" title={report.modifier.desc}>
+              <span>{report.modifier.icon}</span>
+              <span className="font-bold">战场词条 · {report.modifier.name}</span>
+              <span className="text-purple-300/70">{report.modifier.desc}</span>
+            </div>
+          )}
 
           {/* 战场进度条 */}
           {total > 0 && (

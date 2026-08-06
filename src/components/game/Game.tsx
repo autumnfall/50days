@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   applyEventChoice, assign, build, buyUpgrade, chooseNation, closeBattleReport, closeDungeonResult, createGame, endTurn,
   enterDungeon, exchangeForHonor, recruit, recruitMax, train, unlockSkill, waveChanceTomorrow,
-  type GameState,
+  type GameMode, type GameState,
 } from '@/game/engine'
 import { CONFIG, NATIONS, type BuildingId, type NationId, type ResourceId, type UnitId, type UpgradeId } from '@/game/config'
 import { autoSave, deleteSave, getAllSaveMetadata, loadGame, saveGame, type SaveMetadata } from '@/game/save'
@@ -56,11 +56,13 @@ function EndTurnButton({ state, onEndTurn, className }: { state: GameState; onEn
         className,
       )}
     >
-      {state.day >= CONFIG.totalDays ? '⚔️ 迎接终局决战' : '结束回合 ⏭'}
+      {state.mode === 'rogue' ? '结束回合 ⏭' : state.day >= CONFIG.totalDays ? '⚔️ 迎接终局决战' : '结束回合 ⏭'}
       <span className="block text-[11px] font-medium tracking-normal text-stone-800/80">
-        {state.day >= CONFIG.totalDays
-          ? '终局 Boss 即将来袭，做好最后的准备！'
-          : `结算采集与消耗，进入第 ${state.day + 1} 天${waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`}
+        {state.mode === 'rogue'
+          ? `无尽远征 · 进入第 ${state.day + 1} 天${(state.day + 1) % CONFIG.rogue.blessingInterval === 0 ? '（🎁 远征祝福）' : ''}${(state.day + 1) % CONFIG.rogue.bossInterval === 0 ? '（💀 黑暗领主必来！）' : waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`
+          : state.day >= CONFIG.totalDays
+            ? '终局 Boss 即将来袭，做好最后的准备！'
+            : `结算采集与消耗，进入第 ${state.day + 1} 天${waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`}
       </span>
     </button>
   )
@@ -76,6 +78,8 @@ export default function Game() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('village')
   const [settleInfo, setSettleInfo] = useState<SettleResult | null>(null)
   const settledForRef = useRef<GameState | null>(null)
+  /** 本局开局参数（肉鸽模式「同 seed 再战」用） */
+  const lastStartRef = useRef<{ nation: NationId; talents: string[]; mode: GameMode; seed?: number } | null>(null)
 
   // 局结束结算：传承点 + 生涯记录（每局只结算一次，ref 防 StrictMode 双写）
   useEffect(() => {
@@ -107,8 +111,19 @@ export default function Game() {
     }
   }, [])
 
-  const onStart = useCallback((nation: NationId, talents: string[]) => setState(chooseNation(createGame(talents), nation)), [])
+  const onStart = useCallback((nation: NationId, talents: string[], mode: GameMode, seed?: number) => {
+    lastStartRef.current = { nation, talents, mode, seed }
+    setState(chooseNation(createGame(talents, { mode, seed }), nation))
+  }, [])
   const onRestart = useCallback(() => { settledForRef.current = null; setSettleInfo(null); setState(createGame()) }, [])
+  /** 肉鸽模式：以相同 seed/文明/天赋直接再战一局 */
+  const onRetrySeed = useCallback(() => {
+    const last = lastStartRef.current
+    settledForRef.current = null
+    setSettleInfo(null)
+    if (!last) { setState(createGame()); return }
+    setState(chooseNation(createGame(last.talents, { mode: last.mode, seed: last.seed }), last.nation))
+  }, [])
   const onAssign = useCallback((res: ResourceId, delta: number) => setState((s) => assign(s, res, delta)), [])
   const onBuild = useCallback((id: BuildingId) => setState((s) => build(s, id)), [])
   const onTrain = useCallback((id: UnitId) => setState((s) => train(s, id)), [])
@@ -140,7 +155,7 @@ export default function Game() {
   const tutorialSkip = useCallback(() => { markTutorialCompleted(); gotoTutorialStep(null) }, [gotoTutorialStep])
 
   if (state.phase === 'start') return <StartScreen onStart={onStart} onLoad={onLoad} />
-  if (state.phase === 'victory' || state.phase === 'defeat') return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onLoad={onLoad} />
+  if (state.phase === 'victory' || state.phase === 'defeat') return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onRetrySeed={onRetrySeed} onLoad={onLoad} />
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-stone-950 text-stone-100">

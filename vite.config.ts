@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import path from "path"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
@@ -14,5 +15,9 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  // e2e 目录是 Playwright 测试，不纳入 vitest
+  test: {
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
   },
 });

@@ -1,5 +1,6 @@
 import { CONFIG, NATIONS, RESOURCE_INFO, type ResourceId } from '@/game/config'
-import { armyPower, finalBossWave, foodUpkeep, nextWave, popCap, population, previewTurnIncome, soldierCount, waveChanceTomorrow, wavePower, type GameState } from '@/game/engine'
+import { armyPower, finalBossWave, foodUpkeep, nextWave, popCap, population, previewTurnIncome, rogueBossWave, soldierCount, waveChanceTomorrow, wavePower, type GameState } from '@/game/engine'
+import { getRelic } from '@/game/relics'
 import { cn } from '@/lib/utils'
 
 export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
@@ -13,7 +14,10 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
   const myPower = armyPower(state)
   const enemyPower = wavePower(wave)
   const danger = myPower < enemyPower
-  const boss = finalBossWave()
+  const isRogue = state.mode === 'rogue'
+  const boss = isRogue
+    ? rogueBossWave(state.day + (CONFIG.rogue.bossInterval - (state.day % CONFIG.rogue.bossInterval)), state.wavesFaced)
+    : finalBossWave()
   const bossPower = wavePower(boss)
   const preview = state.phase === 'playing' ? previewTurnIncome(state) : null
 
@@ -30,17 +34,44 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
 
         {/* 天数进度 */}
         <div className="min-w-32 flex-1 sm:max-w-60">
-          <div className="flex items-center justify-between text-xs text-stone-400">
-            <span>第 <b className="text-base text-amber-300">{Math.min(state.day, CONFIG.totalDays)}</b> / {CONFIG.totalDays} 天</span>
-            <span>{Math.round((Math.min(state.day, CONFIG.totalDays) / CONFIG.totalDays) * 100)}%</span>
-          </div>
-          <div className="mt-1 h-2 overflow-hidden rounded-full bg-stone-800">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-500"
-              style={{ width: `${(Math.min(state.day, CONFIG.totalDays) / CONFIG.totalDays) * 100}%` }}
-            />
-          </div>
+          {isRogue ? (
+            <>
+              <div className="flex items-center justify-between text-xs text-stone-400">
+                <span>第 <b className="text-base text-purple-300">{state.day}</b> 天 · <span className="text-purple-400/80">无尽远征</span></span>
+                <span>💀 {CONFIG.rogue.bossInterval - (state.day % CONFIG.rogue.bossInterval)} 天后领主</span>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-stone-800">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-500"
+                  style={{ width: `${((state.day % CONFIG.rogue.bossInterval) / CONFIG.rogue.bossInterval) * 100}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-xs text-stone-400">
+                <span>第 <b className="text-base text-amber-300">{Math.min(state.day, CONFIG.totalDays)}</b> / {CONFIG.totalDays} 天</span>
+                <span>{Math.round((Math.min(state.day, CONFIG.totalDays) / CONFIG.totalDays) * 100)}%</span>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-stone-800">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-500"
+                  style={{ width: `${(Math.min(state.day, CONFIG.totalDays) / CONFIG.totalDays) * 100}%` }}
+                />
+              </div>
+            </>
+          )}
         </div>
+
+        {/* 遗物栏（肉鸽模式） */}
+        {isRogue && state.run && state.run.relics.length > 0 && (
+          <div className="flex items-center gap-1 rounded-lg border border-purple-800/50 bg-purple-950/30 px-2 py-1" title="本场远征已获得的遗物">
+            {state.run.relics.map((id) => {
+              const r = getRelic(id)
+              return r ? <span key={id} className="text-sm" title={`${r.icon} ${r.name}：${r.desc}`}>{r.icon}</span> : null
+            })}
+          </div>
+        )}
 
         {/* 资源 */}
         <div className="flex items-center gap-2.5" data-tutorial="resources">
@@ -92,7 +123,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
                 ? 'border-orange-500/50 bg-orange-950/40 text-orange-300'
                 : 'border-stone-600 bg-stone-800/60 text-stone-300',
           )}
-          title={`第 ${wave.wave} 波：${wave.count} 只${wave.name} · 我方战力 ${myPower} vs 敌方约 ${enemyPower}\n终局 Boss：${boss.count} 只${boss.name} · 战力 ${bossPower}`}
+          title={`第 ${wave.wave} 波：${wave.count} 只${wave.name} · 我方战力 ${myPower} vs 敌方约 ${enemyPower}\n${isRogue ? '下个领主' : '终局 Boss'}：${boss.count} 只${boss.name} · 战力 ${bossPower}`}
         >
           <span className="text-base">{wave.icon}</span>
           <span>
@@ -103,7 +134,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
             {danger ? '⚠️ 战力不足' : '✓ 有信心'}
           </span>
           <span className="hidden text-[11px] text-stone-400 sm:inline">
-            · 终局 💀{bossPower}
+            · {isRogue ? '领主' : '终局'} 💀{bossPower}
           </span>
         </div>
 

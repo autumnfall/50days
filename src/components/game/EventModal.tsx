@@ -36,7 +36,9 @@ export default function EventModal({
         <div className={cn('px-6 py-5 text-center', theme.bg)}>
           <div className="text-5xl">{event.icon}</div>
           <h2 className={cn('mt-2 text-lg font-black tracking-widest', theme.title)}>{event.title}</h2>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-stone-500">随机事件 · 请抉择</p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-stone-500">
+            {event.id === 'blessing' ? '远征祝福 · 三选一' : '随机事件 · 请抉择'}
+          </p>
         </div>
         <div className="px-6 pt-4">
           <p className="text-sm leading-relaxed text-stone-300">{event.text}</p>

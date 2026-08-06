@@ -2,6 +2,8 @@
 // 《五十日坚守》数值配置（已经过完整对局模拟平衡验证）
 // ============================================================
 
+import { RELICS, getRelic } from './relics'
+
 export type ResourceId = 'food' | 'wood' | 'gold'
 
 export const RESOURCE_INFO: Record<ResourceId, { name: string; icon: string; color: string }> = {
@@ -26,6 +28,13 @@ export const CONFIG = {
   villagerUpkeep: 2, // 村民每天消耗 2 食物
   starveRatio: 2, // 饥荒时每 2 点缺口死 1 人
   recruitCost: { food: 8 } as Partial<Record<ResourceId, number>>, // 招募村民
+  // ---- 肉鸽模式「无尽远征」----
+  rogue: {
+    blessingInterval: 3, // 每 3 天一次「远征祝福」三选一
+    bossInterval: 25, // 每 25 天一个强化 Boss 波（必来）
+    dayScaling: 0.01, // 常规波次强度随天数递增系数（× (1 + day × 系数)）
+    bossWavePerDay: 0.5, // Boss 波强度 = max(下一波, day × 该系数)
+  },
 }
 
 // ---------------- 建筑 ----------------
@@ -317,6 +326,8 @@ export interface EventEffect {
   omen?: boolean
   /** 概率使随机 1 座已建建筑 -1 级（如 0.5） */
   randomBuildingLoss?: number
+  /** 获得遗物（肉鸽模式「远征祝福」） */
+  relic?: string
 }
 
 export interface EventChoice {
@@ -541,6 +552,7 @@ export function describeEffect(e: EventEffect): string {
   if (e.honor) parts.push(`+${e.honor} 荣耀`)
   if (e.omen) parts.push('下一波敌人增强')
   if (e.randomBuildingLoss) parts.push(`${Math.round(e.randomBuildingLoss * 100)}% 概率随机 1 座建筑 -1 级`)
+  if (e.relic) parts.push(`获得遗物【${getRelic(e.relic)?.name ?? e.relic}】`)
   return parts.length ? parts.join('，') : '无效果'
 }
 
@@ -594,3 +606,48 @@ export function pickRandomEvent(day: number, random: () => number, opts?: { trad
   }
   return null
 }
+
+// ============================================================
+// 肉鸽模式「远征祝福」—— 每 3 天一次三选一（局内构筑）
+// 祝福效果复用 EventEffect DSL，由 engine 组装成 GameEvent 挂起抉择
+// ============================================================
+
+export interface BlessingDef {
+  id: string
+  name: string
+  icon: string
+  desc: string
+  effect: EventEffect
+  weight: number
+}
+
+export const BLESSINGS: BlessingDef[] = [
+  // ---- 遗物类（核心构筑）----
+  ...Object.values(RELICS).map((r): BlessingDef => ({
+    id: `relic_${r.id}`, name: r.name, icon: r.icon, weight: r.weight,
+    desc: `获得遗物：${r.desc}（本次远征持续生效）`,
+    effect: { relic: r.id },
+  })),
+  // ---- 资源补给类 ----
+  { id: 'b_food', name: '天降粮草', icon: '🌾', weight: 8,
+    desc: '立即获得 30 食物、10 木材', effect: { resources: { food: 30, wood: 10 } } },
+  { id: 'b_gold', name: '意外之财', icon: '💰', weight: 8,
+    desc: '立即获得 25 金币', effect: { resources: { gold: 25 } } },
+  { id: 'b_wood', name: '林中宝藏', icon: '🪵', weight: 8,
+    desc: '立即获得 25 木材、5 金币', effect: { resources: { wood: 25, gold: 5 } } },
+  // ---- 人员类 ----
+  { id: 'b_villagers', name: '义民来投', icon: '🧑‍🌾', weight: 8,
+    desc: '+3 村民', effect: { villagers: 3 } },
+  { id: 'b_militia', name: '义勇军', icon: '⚔️', weight: 7,
+    desc: '+2 民兵', effect: { soldiers: { militia: 2 } } },
+  { id: 'b_archer', name: '神射手加盟', icon: '🏹', weight: 5,
+    desc: '+1 弓箭手、+5 金币', effect: { soldiers: { archer: 1 }, resources: { gold: 5 } } },
+  // ---- 荣耀类 ----
+  { id: 'b_honor', name: '威名远扬', icon: '🏅', weight: 7,
+    desc: '+3 荣耀', effect: { honor: 3 } },
+  // ---- 代价型（高风险高回报）----
+  { id: 'b_blood_pact', name: '血之契约', icon: '🩸', weight: 4,
+    desc: '+6 荣耀，但 -2 村民', effect: { honor: 6, villagers: -2 } },
+  { id: 'b_dark_bargain', name: '黑暗交易', icon: '🌑', weight: 4,
+    desc: '+40 金币、+20 食物，但下一波敌人增强', effect: { resources: { gold: 40, food: 20 }, omen: true } },
+]

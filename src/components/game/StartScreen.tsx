@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { CONFIG, NATIONS, type NationId } from '@/game/config'
+import type { GameMode } from '@/game/engine'
+import { formatSeed, randomSeed } from '@/game/rng'
 import {
   TALENTS, TALENT_BRANCH_INFO, TALENT_BRANCH_ORDER, TALENT_POINT_CAP,
   canActivateTalent, deactivateTalent, loadMeta, saveMeta, talentsCost,
@@ -112,8 +114,23 @@ function TalentTree({ meta, setMeta }: { meta: MetaState; setMeta: (m: MetaState
   )
 }
 
-export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId, talents: string[]) => void; onLoad?: (slot: number) => void }) {
+const MODES: { id: GameMode; name: string; icon: string; tagline: string; desc: string; points: string[] }[] = [
+  {
+    id: 'classic', name: '经典战役', icon: '🏰', tagline: '坚守 50 天',
+    desc: '在第 50 天击败终局 Boss 即可获胜。节奏固定，适合熟悉游戏机制。',
+    points: ['第 3 天起敌军随机来袭，逐日递增', '第 50 天终局决战，胜则通关', '通关 +6 传承点，败北最多 +3'],
+  },
+  {
+    id: 'rogue', name: '无尽远征', icon: '💀', tagline: '肉鸽模式 · 守到覆灭',
+    desc: '没有终点的远征：敌人一波强过一波，每 3 天一次「远征祝福」三选一，收集遗物构筑你的村庄，每 25 天迎战黑暗领主。',
+    points: ['每 3 天祝福三选一，遗物永久生效', '每波敌军附带随机战场词条', '按坚守天数/击退波次结算传承点（最多 +8）'],
+  },
+]
+
+export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId, talents: string[], mode: GameMode, seed?: number) => void; onLoad?: (slot: number) => void }) {
   const [selected, setSelected] = useState<NationId | null>(null)
+  const [mode, setMode] = useState<GameMode>('classic')
+  const [seed, setSeed] = useState<number>(randomSeed)
   const [meta, setMeta] = useState<MetaState>(loadMeta)
 
   return (
@@ -135,6 +152,65 @@ export default function StartScreen({ onStart, onLoad }: { onStart: (nation: Nat
             第 {CONFIG.totalDays} 天将迎来<b className="text-red-300">终局决战</b>，击败最终敌人才能获胜！
           </p>
         </div>
+
+        {/* 模式选择 */}
+        <h2 className="mt-7 text-center text-sm font-bold tracking-widest text-stone-400">— 选择游戏模式 —</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {MODES.map((m) => {
+            const active = mode === m.id
+            return (
+              <button
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                className={cn(
+                  'rounded-xl border-2 p-4 text-left transition',
+                  active
+                    ? m.id === 'rogue'
+                      ? 'border-purple-500 bg-purple-950/30 shadow-lg shadow-purple-500/10'
+                      : 'border-amber-500 bg-amber-950/40 shadow-lg shadow-amber-500/10'
+                    : 'border-stone-700 bg-stone-950/50 hover:border-stone-500 hover:bg-stone-800/60',
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl">{m.icon}</span>
+                  <div>
+                    <div className={cn('font-bold', active ? (m.id === 'rogue' ? 'text-purple-200' : 'text-amber-200') : 'text-stone-200')}>{m.name}</div>
+                    <div className="text-[10px] tracking-widest text-stone-500">{m.tagline}</div>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-stone-400">{m.desc}</p>
+                <ul className="mt-2 space-y-1">
+                  {m.points.map((p) => (
+                    <li key={p} className={cn('flex items-start gap-1 text-[11px]', m.id === 'rogue' ? 'text-purple-300/90' : 'text-emerald-300/90')}>
+                      <span className={m.id === 'rogue' ? 'text-purple-500' : 'text-emerald-500'}>✦</span>{p}
+                    </li>
+                  ))}
+                </ul>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* 肉鸽模式：种子与生涯纪录 */}
+        {mode === 'rogue' && (
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 rounded-xl border border-purple-800/50 bg-purple-950/20 px-4 py-2.5 text-[12px]">
+            <span className="text-stone-300">
+              🎲 远征种子 <b className="font-mono text-purple-300">{formatSeed(seed)}</b>
+              <span className="text-stone-500">（同一种子的事件/波次序列完全一致）</span>
+            </span>
+            <button
+              onClick={() => setSeed(randomSeed())}
+              className="rounded-lg border border-purple-700/60 px-2.5 py-1 font-bold text-purple-300 transition hover:bg-purple-900/40 active:scale-95"
+            >
+              换一个
+            </button>
+            {meta.rogue.runs > 0 && (
+              <span className="text-stone-500">
+                远征生涯：{meta.rogue.runs} 局 · 最长坚守 <b className="text-purple-300">{meta.rogue.bestDay}</b> 天 · 最多击退 <b className="text-purple-300">{meta.rogue.bestWave}</b> 波
+              </span>
+            )}
+          </div>
+        )}
 
         {/* 国家选择 */}
         <h2 className="mt-7 text-center text-sm font-bold tracking-widest text-stone-400">— 选择你的文明 —</h2>
@@ -176,17 +252,21 @@ export default function StartScreen({ onStart, onLoad }: { onStart: (nation: Nat
         <TalentTree meta={meta} setMeta={setMeta} />
 
         <button
-          onClick={() => selected && onStart(selected, meta.talents)}
+          onClick={() => selected && onStart(selected, meta.talents, mode, mode === 'rogue' ? seed : undefined)}
           disabled={!selected}
           className={cn(
             'mt-7 w-full rounded-xl py-4 text-lg font-black tracking-[0.3em] transition active:scale-[0.98]',
             selected
-              ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-stone-950 shadow-lg hover:from-amber-500 hover:to-amber-400'
+              ? mode === 'rogue'
+                ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-stone-950 shadow-lg hover:from-purple-500 hover:to-purple-400'
+                : 'bg-gradient-to-r from-amber-600 to-amber-500 text-stone-950 shadow-lg hover:from-amber-500 hover:to-amber-400'
               : 'cursor-not-allowed bg-stone-800 text-stone-600',
           )}
         >
           {selected
-            ? `以「${NATIONS[selected].name}」开局${meta.talents.length > 0 ? `（携带 ${meta.talents.length} 项天赋）` : ''}`
+            ? mode === 'rogue'
+              ? `以「${NATIONS[selected].name}」踏上无尽远征`
+              : `以「${NATIONS[selected].name}」开局${meta.talents.length > 0 ? `（携带 ${meta.talents.length} 项天赋）` : ''}`
             : '请先选择文明'}
         </button>
 

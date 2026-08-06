@@ -93,6 +93,10 @@ export const TALENT_POINTS_VICTORY = 6
 /** 败北保底：每坚守 15 天 +1 点，最多 +3 */
 export const TALENT_POINTS_DEFEAT_PER_DAYS = 15
 export const TALENT_POINTS_DEFEAT_MAX = 3
+/** 肉鸽模式：每坚守 10 天 +1 点，每击退 8 波 +1 点，最多 +8 */
+export const ROGUE_POINTS_PER_DAYS = 10
+export const ROGUE_POINTS_PER_WAVES = 8
+export const ROGUE_POINTS_MAX = 8
 
 /** 整棵天赋树的总花费（80，远大于 30 点上限 → 不可能点完全部天赋的一半） */
 export const TALENT_TREE_TOTAL_COST = TALENTS.reduce((sum, t) => sum + t.cost, 0)
@@ -108,12 +112,14 @@ export interface MetaState {
   runs: number
   victories: number
   bestDay: number
+  /** 肉鸽模式「无尽远征」生涯记录 */
+  rogue: { runs: number; bestDay: number; bestWave: number }
 }
 
 const META_KEY = 'fiftyDays_meta'
 
 export function defaultMeta(): MetaState {
-  return { earned: 0, talents: [], runs: 0, victories: 0, bestDay: 0 }
+  return { earned: 0, talents: [], runs: 0, victories: 0, bestDay: 0, rogue: { runs: 0, bestDay: 0, bestWave: 0 } }
 }
 
 /** 存储抽象：浏览器用 localStorage，测试/无 DOM 环境降级为内存 */
@@ -133,6 +139,8 @@ export function loadMeta(): MetaState {
     if (!raw) return defaultMeta()
     const parsed = JSON.parse(raw)
     const meta = { ...defaultMeta(), ...parsed }
+    // 兼容旧档：肉鸽生涯记录
+    meta.rogue = { ...defaultMeta().rogue, ...(parsed.rogue ?? {}) }
     // 过滤已删除/未知的天赋 id，并重新校验合法性
     meta.talents = sanitizeTalents(meta.talents, meta.earned)
     return meta
@@ -205,6 +213,7 @@ export interface SettleResult {
 
 /** 根据一局结果结算传承点与生涯记录（纯函数，不落地；调用方负责 saveMeta） */
 export function settleRun(state: GameState, meta: MetaState): SettleResult {
+  if (state.mode === 'rogue') return settleRogueRun(state, meta)
   const victory = state.phase === 'victory'
   const day = Math.min(state.day, 50)
   const rawGain = victory
@@ -223,5 +232,29 @@ export function settleRun(state: GameState, meta: MetaState): SettleResult {
     gained,
     rawGain,
     victory,
+  }
+}
+
+/** 肉鸽模式结算：按坚守天数与击退波次阶梯给点（无胜利，守到覆灭为止） */
+function settleRogueRun(state: GameState, meta: MetaState): SettleResult {
+  const rawGain = Math.min(
+    ROGUE_POINTS_MAX,
+    Math.floor(state.day / ROGUE_POINTS_PER_DAYS) + Math.floor(state.wavesFaced / ROGUE_POINTS_PER_WAVES),
+  )
+  const earned = Math.min(TALENT_POINT_CAP, meta.earned + rawGain)
+  const gained = earned - meta.earned
+  return {
+    meta: {
+      ...meta,
+      earned,
+      rogue: {
+        runs: meta.rogue.runs + 1,
+        bestDay: Math.max(meta.rogue.bestDay, state.day),
+        bestWave: Math.max(meta.rogue.bestWave, state.wavesFaced),
+      },
+    },
+    gained,
+    rawGain,
+    victory: false,
   }
 }

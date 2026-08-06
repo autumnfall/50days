@@ -43,16 +43,24 @@ export async function selectNation(page: Page, nation: NationId) {
   await page.getByRole('button', { name: NATION_NAMES[nation] }).click()
 }
 
+export type GameMode = 'classic' | 'rogue'
+
+/** 在开始界面选择游戏模式（经典战役 / 无尽远征） */
+export async function selectMode(page: Page, mode: GameMode) {
+  await page.getByRole('button', { name: mode === 'rogue' ? /无尽远征/ : /经典战役/ }).first().click()
+}
+
 export async function clickStart(page: Page) {
-  const btn = page.getByRole('button', { name: /以「.*」开局/ })
+  const btn = page.getByRole('button', { name: /以「.*」(开局|踏上无尽远征)/ })
   await expect(btn).toBeEnabled()
   await btn.click()
 }
 
-export async function startGame(page: Page, nation: NationId = 'agriculture') {
+export async function startGame(page: Page, nation: NationId = 'agriculture', mode: GameMode = 'classic') {
   await disableTutorial(page)
   await page.goto('/')
   await expect(page.getByText('五十日坚守')).toBeVisible()
+  if (mode === 'rogue') await selectMode(page, 'rogue')
   await selectNation(page, nation)
   await clickStart(page)
   await expect(getEndTurnButton(page)).toBeVisible({ timeout: 10_000 })
@@ -83,8 +91,8 @@ export async function dismissAllModals(page: Page) {
       continue
     }
 
-    // Check for event overlay
-    const eventLabel = page.getByText('随机事件 · 请抉择')
+    // Check for event overlay (随机事件 / 远征祝福)
+    const eventLabel = page.getByText(/随机事件 · 请抉择|远征祝福 · 三选一/)
     const hasEvent = await eventLabel.isVisible({ timeout: 300 }).catch(() => false)
     if (hasEvent) {
       const btns = page.locator('.fixed').last().locator('button:not([disabled])')
@@ -358,6 +366,11 @@ export async function redistributeVillagers(page: Page, target: {
   wood: number
   gold: number
 }): Promise<void> {
+  // 移动端：分配面板只在「村民」Tab 激活时渲染，需先切换
+  if ((page.viewportSize()?.width ?? 1280) < 1024) {
+    await page.locator('nav button:has-text("👥")').first().click()
+    await page.waitForTimeout(300)
+  }
   const panel = page.locator('[data-tutorial="assignment-panel"]').last()
   const rows = panel.locator('.flex.items-center.gap-2.rounded-lg')
 

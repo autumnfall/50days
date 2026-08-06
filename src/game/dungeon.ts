@@ -60,17 +60,17 @@ export const DUNGEON_MODIFIERS: DungeonModifier[] = [
   { id: 'chaos', name: '混乱', icon: '😵', desc: '首回合我方伤害 -50%', type: 'player_debuff' },
 ]
 
-/** 按楼层随机抽取修饰：1-3层无，4-7层随机1个，8-10层随机1增益+1减益 */
-export function rollModifiers(floor: number): DungeonModifier[] {
+/** 按楼层随机抽取修饰：1-3层无，4-7层随机1个，8-10层随机1增益+1减益。可注入随机源（种子化） */
+export function rollModifiers(floor: number, random: () => number = Math.random): DungeonModifier[] {
   if (floor <= 3) return []
   const enemyBuffs = DUNGEON_MODIFIERS.filter((m) => m.type === 'enemy_buff')
   const playerDebuffs = DUNGEON_MODIFIERS.filter((m) => m.type === 'player_debuff')
   if (floor <= 7) {
     const all = [...enemyBuffs, ...playerDebuffs]
-    return [all[Math.floor(Math.random() * all.length)]]
+    return [all[Math.floor(random() * all.length)]]
   }
-  const eb = enemyBuffs[Math.floor(Math.random() * enemyBuffs.length)]
-  const pd = playerDebuffs[Math.floor(Math.random() * playerDebuffs.length)]
+  const eb = enemyBuffs[Math.floor(random() * enemyBuffs.length)]
+  const pd = playerDebuffs[Math.floor(random() * playerDebuffs.length)]
   return [eb, pd]
 }
 

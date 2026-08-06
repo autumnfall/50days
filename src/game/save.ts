@@ -4,6 +4,7 @@
 
 import type { GameState, Phase } from './engine'
 import type { NationId } from './config'
+import { randomSeed } from './rng'
 
 const SAVE_KEY_PREFIX = 'fiftyDays_save_'
 const AUTOSAVE_KEY = 'fiftyDays_autosave'
@@ -31,6 +32,10 @@ function deserialize(json: string): GameState | null {
     // 兼容旧档：局外天赋 / 战神兵种
     if (!Array.isArray(parsed.talents)) parsed.talents = []
     parsed.soldiers = { militia: 0, archer: 0, knight: 0, warlord: 0, ...parsed.soldiers }
+    // 兼容旧档：游戏模式 / 种子化随机源 / 肉鸽 run 状态
+    if (parsed.mode !== 'rogue') parsed.mode = 'classic'
+    if (typeof parsed.rng !== 'number') parsed.rng = randomSeed()
+    if (parsed.run === undefined) parsed.run = null
     return { ...parsed, skills: new Set<string>(parsed.skills ?? []) }
   } catch {
     return null
