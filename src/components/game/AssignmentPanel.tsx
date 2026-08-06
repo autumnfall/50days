@@ -1,5 +1,5 @@
 import { CONFIG, RESOURCE_INFO, type ResourceId } from '@/game/config'
-import { hasSkill, idleVillagers, type GameState } from '@/game/engine'
+import { gatherPerPerson, idleVillagers, type GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
 import { Panel } from './ui-bits'
 
@@ -17,18 +17,13 @@ export default function AssignmentPanel({
   onAssign: (res: ResourceId, delta: number) => void
 }) {
   const idle = idleVillagers(state)
+  // 直接复用引擎的采集公式（含文明/技能/天赋/遗物全量加成）
+  const per = gatherPerPerson(state)
 
   function perCap(job: (typeof JOBS)[number]): number {
-    if (job.id === 'food') {
-      const farmBonus = CONFIG.farmBonus * (hasSkill(state, 'ag_fertility') ? 2 : 1)
-      return CONFIG.foodGatherBase + state.buildings.farm * farmBonus
-        + (state.nation === 'agriculture' ? 1 : 0) + (hasSkill(state, 'ag_irrigate') ? 1 : 0)
-    }
-    if (job.id === 'gold') {
-      return CONFIG.gatherBase + state.buildings.mine
-        + (state.nation === 'commerce' ? 1 : 0) + (hasSkill(state, 'co_market') ? 1 : 0)
-    }
-    return CONFIG.gatherBase + state.buildings.lumber
+    if (job.id === 'food') return per.foodPer
+    if (job.id === 'gold') return per.goldPer
+    return per.woodPer
   }
 
   return (

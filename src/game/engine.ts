@@ -9,6 +9,7 @@ import {
 } from './config'
 import { DUNGEON_FLOORS, DUNGEON_MODIFIERS, rollModifiers, type DungeonModifier } from './dungeon'
 import { nextRandom, randomSeed } from './rng'
+import { collectMods } from './effects'
 
 export type Phase = 'start' | 'playing' | 'battle' | 'dungeon_result' | 'victory' | 'defeat'
 
@@ -266,7 +267,8 @@ export function buyUpgrade(s: GameState, id: UpgradeId): GameState {
 /** 当前兑换费用：100 × 2^次数，黄金水道 ×0.75 取整 */
 export function honorExchangeCost(s: GameState, res: ResourceId): number {
   let cost = HONOR_EXCHANGE_BASE * Math.pow(2, s.honorExchange[res])
-  if (hasSkill(s, 'co_goldwater')) cost = Math.floor(cost * 0.75)
+  const em = collectMods(s).exchangeCostMult
+  if (em !== 1) cost = Math.floor(cost * em)
   return cost
 }
 
@@ -299,61 +301,32 @@ export function population(s: GameState): number {
 }
 
 export function popCap(s: GameState): number {
-  let cap = CONFIG.basePopCap + s.buildings.house * CONFIG.houseCapPer
-  if (hasSkill(s, 'ag_granary')) cap += 4
-  if (hasSkill(s, 'ag_population')) cap += 8
-  return cap
+  return CONFIG.basePopCap + s.buildings.house * CONFIG.houseCapPer + collectMods(s).popCapFlat
 }
 
 export function idleVillagers(s: GameState): number {
   return s.villagers - s.assignment.food - s.assignment.wood - s.assignment.gold
 }
 
-/** 建筑有效上限 = 基础 max + 终局升级 + 局外天赋 */
+/** 建筑有效上限 = 基础 max + 终局升级 + 效果源（天赋等）加成 */
 export function effectiveMax(s: GameState, id: BuildingId): number {
   let max = BUILDINGS[id].max
   if (id === 'farm' || id === 'lumber' || id === 'mine' || id === 'house') max += s.upgrades.prod
   if (id === 'wall' || id === 'tower') max += s.upgrades.def
-  // ---- 局外天赋 ----
-  if (id === 'farm' && hasTalent(s, 'farm_cap')) max += 2
-  if ((id === 'lumber' || id === 'mine') && hasTalent(s, 'industry_cap')) max += 1
-  if (id === 'house' && hasTalent(s, 'house_cap')) max += 1
-  if ((id === 'wall' || id === 'tower') && hasTalent(s, 'bastion_cap')) max += 1
-  if (id === 'barracks' && hasTalent(s, 'warlord')) max += 1 // 战神：兵营可升至 Lv4
-  return max
+  return max + (collectMods(s).buildingCapFlat[id] ?? 0)
 }
 
-/** 基础三兵种的实际攻击（含国家/技能/天赋/终局升级加成） */
+/** 基础三兵种的实际攻击（含文明/技能/天赋/遗物/终局升级加成） */
 function baseUnitAtk(s: GameState, id: BaseUnitId): number {
-  let atk = UNITS[id].atk
-  if (s.nation === 'military') atk += 2
-  if (hasSkill(s, 'mi_drill')) atk += 1
-  if (hasSkill(s, 'mi_kingarmy')) atk += 3
-  if (hasSkill(s, 'ag_militia') && id === 'militia') atk += 3
-  if (hasSkill(s, 'mi_veteran') && id === 'knight') atk += 6
-  if (hasSkill(s, 'mi_veteran') && id === 'archer') atk += 3
-  // 终局军队增强
-  const armyAtk: Record<BaseUnitId, number> = { militia: 1, archer: 2, knight: 3 }
-  atk += armyAtk[id] * s.upgrades.army
-  // 局外天赋：操练
-  if (hasTalent(s, 'drill')) atk += 1
-  // 遗物：磨刀石
-  if (hasRelic(s, 'whetstone')) atk = Math.round(atk * 1.1)
-  return atk
+  const m = collectMods(s)
+  const atk = UNITS[id].atk + m.unitAtkFlat + (m.unitAtkByType[id] ?? 0)
+  return m.unitAtkMult !== 1 ? Math.round(atk * m.unitAtkMult) : atk
 }
 
 /** 基础三兵种的实际生命 */
 function baseUnitHp(s: GameState, id: BaseUnitId): number {
-  let hp = UNITS[id].hp
-  if (hasSkill(s, 'mi_armor')) hp += 4
-  if (hasSkill(s, 'mi_discipline')) hp += 6
-  if (hasSkill(s, 'mi_kingarmy')) hp += 6
-  if (hasSkill(s, 'ag_militia') && id === 'militia') hp += 6
-  const armyHp: Record<BaseUnitId, number> = { militia: 2, archer: 2, knight: 4 }
-  hp += armyHp[id] * s.upgrades.army
-  // 局外天赋：甲胄
-  if (hasTalent(s, 'armor')) hp += 3
-  return hp
+  const m = collectMods(s)
+  return UNITS[id].hp + m.unitHpFlat + (m.unitHpByType[id] ?? 0)
 }
 
 /**
@@ -372,30 +345,15 @@ export function unitHp(s: GameState, id: UnitId): number {
 }
 
 export function towerDmg(s: GameState): number {
-  let dmg = TOWER_DMG
-  if (hasSkill(s, 'co_engineer')) dmg += 4
-  if (hasSkill(s, 'co_steel')) dmg += 6
-  if (hasSkill(s, 'co_fortress')) dmg += 10
-  dmg += 2 * s.upgrades.def
-  // 局外天赋：射术 + 箭阵（每座防御建筑 +2）
-  if (hasTalent(s, 'marksman')) dmg += 4
-  if (hasTalent(s, 'arrow_volley')) dmg += 2 * (s.buildings.wall + s.buildings.tower)
-  // 遗物：长弓图纸
-  if (hasRelic(s, 'longbow')) dmg = Math.round(dmg * 1.25)
-  return dmg
+  const m = collectMods(s)
+  const dmg = TOWER_DMG + m.towerDmgFlat + m.towerDmgPerDefBuilding * (s.buildings.wall + s.buildings.tower)
+  return m.towerDmgMult !== 1 ? Math.round(dmg * m.towerDmgMult) : dmg
 }
 
 export function wallAbsorb(s: GameState): number {
-  let ab = WALL_ABSORB_PER
-  if (hasSkill(s, 'co_engineer')) ab += 10
-  if (hasSkill(s, 'ag_earthwall')) ab += 15
-  if (hasSkill(s, 'co_fortress')) ab += 20
-  ab += 7 * s.upgrades.def
-  // 局外天赋：加固
-  if (hasTalent(s, 'reinforce')) ab += 10
-  // 遗物：堡垒基石
-  if (hasRelic(s, 'thick_walls')) ab = Math.round(ab * 1.2)
-  return ab
+  const m = collectMods(s)
+  const ab = WALL_ABSORB_PER + m.wallAbsorbFlat
+  return m.wallAbsorbMult !== 1 ? Math.round(ab * m.wallAbsorbMult) : ab
 }
 
 /** 某天敌军来袭的概率（第 3 天起 20%，每天 +20%，第 5 天必来） */
@@ -451,29 +409,26 @@ export function foodUpkeep(s: GameState): number {
 
 /** 农场每级加成的实际值（沃土天赋 +1，丰收祝福翻倍） */
 export function farmBonusPer(s: GameState): number {
-  const base = CONFIG.farmBonus + (hasTalent(s, 'rich_soil') ? 1 : 0)
-  return base * (hasSkill(s, 'ag_fertility') ? 2 : 1)
+  const m = collectMods(s)
+  return (CONFIG.farmBonus + m.farmBonusFlat) * m.farmBonusMult
 }
 
-/** 每位村民的各资源日产出（含建筑/国家/技能/局外天赋加成） */
+/** 每位村民的各资源日产出（含建筑/文明/技能/天赋/遗物加成） */
 export function gatherPerPerson(s: GameState): { foodPer: number; woodPer: number; goldPer: number } {
-  const foodPer = CONFIG.foodGatherBase + s.buildings.farm * farmBonusPer(s)
-    + (s.nation === 'agriculture' ? 1 : 0) + (hasSkill(s, 'ag_irrigate') ? 1 : 0)
-    + (hasTalent(s, 'farm_hands') ? 1 : 0)
-  const woodPer = CONFIG.gatherBase + s.buildings.lumber
-    + (hasTalent(s, 'lumberjack') ? 1 : 0)
-  const goldPer = CONFIG.gatherBase + s.buildings.mine
-    + (s.nation === 'commerce' ? 1 : 0) + (hasSkill(s, 'co_market') ? 1 : 0)
-    + (hasTalent(s, 'deep_mine') ? 1 : 0)
+  const m = collectMods(s)
+  const foodPer = CONFIG.foodGatherBase + s.buildings.farm * farmBonusPer(s) + m.gatherFlat.food
+  const woodPer = CONFIG.gatherBase + s.buildings.lumber + m.gatherFlat.wood
+  const goldPer = CONFIG.gatherBase + s.buildings.mine + m.gatherFlat.gold
   return { foodPer, woodPer, goldPer }
 }
 
 // ---------------- 建筑/训练/招募费用（含国家/技能折扣，每步向下取整） ----------------
 
 export function buildCost(s: GameState, id: BuildingId): Partial<Record<ResourceId, number>> {
+  const m = collectMods(s)
   let cost = BUILDINGS[id].cost(s.buildings[id])
   // 局外天赋：营造法式 —— 升级加价幅度减半（基础价不变，向上取整）
-  if (hasTalent(s, 'half_scaling')) {
+  if (m.flags.halfScaling) {
     const base = BUILDINGS[id].cost(0)
     cost = Object.fromEntries(
       (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => {
@@ -482,43 +437,25 @@ export function buildCost(s: GameState, id: BuildingId): Partial<Record<Resource
       }),
     )
   }
-  if (s.nation === 'commerce') {
+  // 费用折扣链（保序，每步向下取整）
+  for (const mult of m.buildCostMults) {
     cost = Object.fromEntries(
-      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * 0.85))]),
-    )
-  }
-  if (hasSkill(s, 'co_steel')) {
-    cost = Object.fromEntries(
-      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * 0.9))]),
-    )
-  }
-  // 遗物：坚固图纸
-  if (hasRelic(s, 'sturdy_plans')) {
-    cost = Object.fromEntries(
-      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * 0.9))]),
+      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * mult))]),
     )
   }
   return cost
 }
 
 export function trainCost(s: GameState, id: UnitId): Partial<Record<ResourceId, number>> {
+  const m = collectMods(s)
   let cost = { ...UNITS[id].cost }
-  if (s.nation === 'military') {
+  // 训练费用折扣链（保序，每步向下取整）
+  for (const mult of m.trainCostMults) {
     cost = Object.fromEntries(
-      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * 0.8))]),
+      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * mult))]),
     ) as Partial<Record<ResourceId, number>>
   }
-  if (hasSkill(s, 'mi_honor')) {
-    cost = Object.fromEntries(
-      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * 0.9))]),
-    ) as Partial<Record<ResourceId, number>>
-  }
-  if (hasSkill(s, 'mi_kingarmy')) {
-    cost = Object.fromEntries(
-      (Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => [r, Math.max(1, Math.floor(v * 0.8))]),
-    ) as Partial<Record<ResourceId, number>>
-  }
-  if (hasSkill(s, 'co_mercenary')) {
+  if (m.flags.mercenary) {
     // 只花金币，免食物，费用 -15%
     const total = Math.max(1, Math.floor(((cost.gold ?? 0) + (cost.food ?? 0) * 0.5) * 0.85))
     cost = { gold: total }
@@ -528,8 +465,7 @@ export function trainCost(s: GameState, id: UnitId): Partial<Record<ResourceId, 
 
 export function recruitCost(s: GameState): Partial<Record<ResourceId, number>> {
   let cost = CONFIG.recruitCost.food!
-  if (s.nation === 'agriculture') cost = Math.max(1, Math.floor(cost * 0.75))
-  if (hasSkill(s, 'ag_recruit')) cost = Math.max(1, Math.floor(cost * 0.5))
+  for (const mult of collectMods(s).recruitCostMults) cost = Math.max(1, Math.floor(cost * mult))
   return { food: cost }
 }
 
@@ -631,8 +567,9 @@ export function recruitMax(s: GameState): GameState {
 export function endTurn(s: GameState): GameState {
   if (s.phase !== 'playing') return s
   let ns: GameState = { ...s, resources: { ...s.resources }, log: [...s.log], dungeon: { ...s.dungeon, dailyAttempted: false, pendingResult: null } }
+  const mods = collectMods(ns)
 
-  // 1. 资源采集（含国家/技能/局外天赋加成）
+  // 1. 资源采集（含文明/技能/天赋/遗物加成）
   const { foodPer, woodPer, goldPer } = gatherPerPerson(ns)
 
   const income: Income = {
@@ -642,15 +579,13 @@ export function endTurn(s: GameState): GameState {
     upkeep: 0,
     starved: 0,
   }
-  // 生生不息：食物采集总产出 +25%
-  if (hasSkill(ns, 'ag_abundance')) income.food = Math.floor(income.food * 1.25)
-  // 遗物：丰收图腾
-  if (hasRelic(ns, 'harvest_totem')) income.food = Math.floor(income.food * 1.15)
-  // 商路关税：金币采集 +20%
-  if (hasSkill(ns, 'co_tariff')) income.gold = Math.floor(income.gold * 1.2)
-  // 局外天赋：义勇 —— 每名民兵各资源 +2（固定值，不吃任何百分比加成）
-  if (hasTalent(ns, 'militia_economy') && ns.soldiers.militia > 0) {
-    const militiaBonus = ns.soldiers.militia * 2
+  // 采集乘算链（生生不息 ×1.25、丰收图腾 ×1.15、商路关税 ×1.2 等，保序逐步取整）
+  for (const mult of mods.gatherMults.food) income.food = Math.floor(income.food * mult)
+  for (const mult of mods.gatherMults.wood) income.wood = Math.floor(income.wood * mult)
+  for (const mult of mods.gatherMults.gold) income.gold = Math.floor(income.gold * mult)
+  // 义勇：每名民兵各资源 +N（固定值，不吃任何百分比加成）
+  if (mods.militiaIncome > 0 && ns.soldiers.militia > 0) {
+    const militiaBonus = ns.soldiers.militia * mods.militiaIncome
     income.food += militiaBonus
     income.wood += militiaBonus
     income.gold += militiaBonus
@@ -660,9 +595,8 @@ export function endTurn(s: GameState): GameState {
   ns.resources.wood += income.wood
   ns.resources.gold += income.gold
 
-  // 四方商队/黄金水道：金币存量利息（收入入账后）；遗物：商人护符
-  let interestRate = hasSkill(ns, 'co_goldwater') ? 0.05 : hasSkill(ns, 'co_caravan') ? 0.02 : 0
-  if (hasRelic(ns, 'merchant_charm')) interestRate += 0.03
+  // 金币存量利息（收入入账后）：技能档位取高 + 遗物增量
+  const interestRate = mods.interestRateMax + mods.interestRateAdd
   if (interestRate > 0 && ns.resources.gold > 0) {
     const interest = Math.floor(ns.resources.gold * interestRate)
     if (interest > 0) {
@@ -678,11 +612,9 @@ export function endTurn(s: GameState): GameState {
     // 饥荒：每 starveRatio 点缺口饿死 1 人，优先饿死村民
     let deficit = Math.ceil(-ns.resources.food / CONFIG.starveRatio)
     ns.resources.food = 0
-    // 谷仓少饿死 1 人 + 人丁兴旺再少 1 人
-    if (hasSkill(ns, 'ag_granary') && deficit > 0) deficit -= 1
-    if (hasSkill(ns, 'ag_population') && deficit > 0) deficit -= 1
-    // 遗物：神圣谷种 —— 饥荒饿死人数减半
-    if (hasRelic(ns, 'sacred_grain') && deficit > 0) deficit = Math.ceil(deficit / 2)
+    // 饥荒减免（谷仓/人丁兴旺各 -1）与神圣谷种（减半）
+    if (deficit > 0) deficit = Math.max(0, deficit - mods.starveFlatReduction)
+    if (mods.flags.sacredGrain && deficit > 0) deficit = Math.ceil(deficit / 2)
     let remaining = deficit
     const villagerDeaths = Math.min(ns.villagers, remaining)
     ns.villagers -= villagerDeaths
@@ -714,25 +646,24 @@ export function endTurn(s: GameState): GameState {
     ns = { ...ns, rng: turnRng.getState() }
     ns = offerBlessing(ns)
   } else {
-    const ev = pickRandomEvent(newDay, turnRng.rnd, { traderBoost: hasSkill(ns, 'co_caravan') })
+    const ev = pickRandomEvent(newDay, turnRng.rnd, { traderBoost: mods.flags.traderBoost })
     ns = { ...ns, rng: turnRng.getState() }
     if (ev) {
       ns = { ...ns, pendingEvent: { event: scaleEvent(ev, newDay) } }
     }
   }
 
-  // 5. 流浪者来投（生生不息 → 每 2 天；招贤纳士 → 每次 +2 人；遗物：拓荒者之靴 +1）
-  const wanderInterval = hasSkill(ns, 'ag_abundance') ? 2 : CONFIG.wandererInterval
+  // 5. 流浪者来投（生生不息 → 间隔缩短；招贤纳士/拓荒者之靴 → 人数增加）
+  const wanderInterval = mods.wandererInterval > 0 ? mods.wandererInterval : CONFIG.wandererInterval
   if (newDay % wanderInterval === 0 && population(ns) < popCap(ns) && ns.resources.food > 0) {
-    const base = (hasSkill(ns, 'ag_recruit') ? 2 : 1) + (hasRelic(ns, 'pioneer_boots') ? 1 : 0)
-    const count = Math.min(base, popCap(ns) - population(ns))
+    const count = Math.min(1 + mods.wandererBonus, popCap(ns) - population(ns))
     if (count > 0) {
       ns = { ...ns, villagers: ns.villagers + count, log: pushLog(ns, `🚶 流浪者路过村庄，决定留下来（+${count} 村民）`, 'info') }
     }
   }
 
   // 5b. 局外天赋：春播秋收 —— 每 10 天农场自动 +1 级（免费，可突破建造上限；无尽远征中不限天数）
-  if (hasTalent(ns, 'spring_harvest') && newDay % 10 === 0 && (ns.mode === 'rogue' || newDay < CONFIG.totalDays)) {
+  if (mods.flags.springHarvest && newDay % 10 === 0 && (ns.mode === 'rogue' || newDay < CONFIG.totalDays)) {
     ns = {
       ...ns,
       buildings: { ...ns.buildings, farm: ns.buildings.farm + 1 },
@@ -875,24 +806,24 @@ export interface TurnPreview {
 
 export function previewTurnIncome(s: GameState): TurnPreview {
   const { foodPer, woodPer, goldPer } = gatherPerPerson(s)
+  const mods = collectMods(s)
 
   let foodGather = s.assignment.food * foodPer
   let woodGather = s.assignment.wood * woodPer
   let goldGather = s.assignment.gold * goldPer
-  if (hasSkill(s, 'ag_abundance')) foodGather = Math.floor(foodGather * 1.25)
-  if (hasRelic(s, 'harvest_totem')) foodGather = Math.floor(foodGather * 1.15)
-  if (hasSkill(s, 'co_tariff')) goldGather = Math.floor(goldGather * 1.2)
-  // 局外天赋：义勇（固定值，不吃百分比加成）
-  if (hasTalent(s, 'militia_economy') && s.soldiers.militia > 0) {
-    const militiaBonus = s.soldiers.militia * 2
+  for (const mult of mods.gatherMults.food) foodGather = Math.floor(foodGather * mult)
+  for (const mult of mods.gatherMults.wood) woodGather = Math.floor(woodGather * mult)
+  for (const mult of mods.gatherMults.gold) goldGather = Math.floor(goldGather * mult)
+  // 义勇（固定值，不吃百分比加成）
+  if (mods.militiaIncome > 0 && s.soldiers.militia > 0) {
+    const militiaBonus = s.soldiers.militia * mods.militiaIncome
     foodGather += militiaBonus
     woodGather += militiaBonus
     goldGather += militiaBonus
   }
 
   const goldAfterGather = s.resources.gold + goldGather
-  let interestRate = hasSkill(s, 'co_goldwater') ? 0.05 : hasSkill(s, 'co_caravan') ? 0.02 : 0
-  if (hasRelic(s, 'merchant_charm')) interestRate += 0.03
+  const interestRate = mods.interestRateMax + mods.interestRateAdd
   const interest = interestRate > 0 && goldAfterGather > 0 ? Math.floor(goldAfterGather * interestRate) : 0
 
   const upkeep = foodUpkeep(s)
@@ -901,8 +832,7 @@ export function previewTurnIncome(s: GameState): TurnPreview {
   let starved = 0
   if (foodAfter < 0) {
     let deficit = Math.ceil(-foodAfter / CONFIG.starveRatio)
-    if (hasSkill(s, 'ag_granary') && deficit > 0) deficit -= 1
-    if (hasSkill(s, 'ag_population') && deficit > 0) deficit -= 1
+    if (deficit > 0) deficit = Math.max(0, deficit - mods.starveFlatReduction)
     if (deficit > 0) starved = Math.min(deficit, population(s))
   }
 
@@ -1023,12 +953,11 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
   let wallHp = ns.buildings.wall * wallAbsorb(ns)
   const towers = ns.buildings.tower
   const tDmg = towerDmg(ns)
-  let firstRoundBonus = hasSkill(ns, 'mi_warhorn') ? 1.4 : 1
-  // 遗物：战鼓
-  if (hasRelic(ns, 'war_drum')) firstRoundBonus *= 1.25
-  const bloodlust = hasSkill(ns, 'mi_bloodlust')
-  const militiaAll = hasSkill(ns, 'ag_allmilitia')
-  const discipline = hasSkill(ns, 'mi_discipline')
+  const mods = collectMods(ns)
+  const firstRoundBonus = mods.firstRoundMult
+  const bloodlust = mods.flags.bloodlust
+  const militiaAll = mods.flags.militiaAll
+  const enemyDmgMult = mods.enemyDmgMult
 
   const report: BattleReport = {
     wave: { ...wave, count: enemyCount, hpEach: enemyHp, atkEach: enemyAtk },
@@ -1061,7 +990,7 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
       if (hasChaos && round === 1) playerDmg = Math.round(playerDmg * 0.5)
       let enemyDmg = enemies.reduce((sum, e) => sum + e.atk, 0)
       if (hasFrenzy) enemyDmg *= 1 + kills * 0.05
-      enemyDmg = Math.round(enemyDmg * (0.9 + rnd() * 0.2) * (discipline ? 0.9 : 1))
+      enemyDmg = Math.round(enemyDmg * (0.9 + rnd() * 0.2) * enemyDmgMult)
 
       // 我方伤害 → 击杀敌人
       let dmg = playerDmg
@@ -1132,22 +1061,11 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
     if (lost > 0) report.soldiersLost[id] = lost
   })
 
-  // 英魂庇护：各兵种复活阵亡数 30%（向下取整）
-  if (hasSkill(ns, 'mi_soulguard')) {
+  // 战后复活/挽回链（英魂庇护 30%、急救包 20%，各自按原始阵亡数 floor 后相加）
+  for (const ratio of mods.reviveRatios) {
     ;(['militia', 'archer', 'knight', 'warlord'] as UnitId[]).forEach((id) => {
       const lost = report.soldiersLost[id] ?? 0
-      const revived = Math.floor(lost * 0.3)
-      if (revived > 0) {
-        survivors[id] += revived
-        report.soldiersRevived[id] = revived
-      }
-    })
-  }
-  // 遗物：急救包 —— 再挽回阵亡数的 20%（与英魂庇护叠乘结算）
-  if (hasRelic(ns, 'field_medic')) {
-    ;(['militia', 'archer', 'knight', 'warlord'] as UnitId[]).forEach((id) => {
-      const lost = report.soldiersLost[id] ?? 0
-      const saved = Math.floor(lost * 0.2)
+      const saved = Math.floor(lost * ratio)
       if (saved > 0) {
         survivors[id] += saved
         report.soldiersRevived[id] = (report.soldiersRevived[id] ?? 0) + saved
@@ -1160,8 +1078,9 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
   if (wallHp <= 0 && ns.buildings.wall > 0) {
     const original = ns.buildings.wall
     let lost = original
-    if (hasSkill(ns, 'ag_earthwall')) {
-      const repaired = Math.floor(original / 2)
+    // 大地壁垒：战后自动修复一半，损失向上取整
+    if (mods.wallRepairRatio > 0) {
+      const repaired = Math.floor(original * mods.wallRepairRatio)
       lost = original - repaired // 如 5 全毁 → 实际损失 3，修复 2
       report.wallRepaired = repaired
     }
@@ -1174,15 +1093,9 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
 
   if (report.won) {
     let loot = wave.lootGold
-    let honor = 1 + Math.floor(wave.wave / 3)
-    if (hasSkill(ns, 'mi_honor')) honor += 1
-    if (hasSkill(ns, 'co_war_economy')) {
-      loot = Math.round(loot * 1.5)
-      honor += 1
-    }
-    if (hasSkill(ns, 'co_goldwater')) loot = Math.round(loot * 1.25)
-    // 遗物：点金手
-    if (hasRelic(ns, 'golden_touch')) loot = Math.round(loot * 1.3)
+    const honor = 1 + Math.floor(wave.wave / 3) + mods.honorPerWin
+    // 缴获乘算链（战争经济 ×1.5、黄金水道 ×1.25、点金手 ×1.3，保序逐步取整）
+    for (const mult of mods.lootMults) loot = Math.round(loot * mult)
     report.lootGold = loot
     report.honorGained = honor
     ns = {
@@ -1190,11 +1103,11 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
       resources: { ...ns.resources, gold: ns.resources.gold + loot },
       honor: ns.honor + honor,
     }
-    // 遗物：战旗 —— 每击退一波 +1 民兵
-    if (hasRelic(ns, 'war_banner')) {
+    // 战旗：每击退一波 +1 民兵
+    if (mods.flags.warBanner) {
       ns = { ...ns, soldiers: { ...ns.soldiers, militia: ns.soldiers.militia + 1 } }
     }
-    ns = { ...ns, log: pushLog(ns, `🏆 击退了${wave.name}！缴获 ${loot} 金币、${honor} 荣耀${hasRelic(ns, 'war_banner') ? '，战旗感召 1 名民兵加入' : ''}`, 'good') }
+    ns = { ...ns, log: pushLog(ns, `🏆 击退了${wave.name}！缴获 ${loot} 金币、${honor} 荣耀${mods.flags.warBanner ? '，战旗感召 1 名民兵加入' : ''}`, 'good') }
   } else {
     // 被攻破：残敌劫掠村庄
     const raiders = enemies.length
@@ -1285,11 +1198,11 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
     }
   })
 
-  const firstRoundBonus = hasSkill(s, 'mi_warhorn') ? 1.4 : 1
-  const bloodlust = hasSkill(s, 'mi_bloodlust')
-  const militiaAll = hasSkill(s, 'ag_allmilitia')
-  const discipline = hasSkill(s, 'mi_discipline')
-  const soulguard = hasSkill(s, 'mi_soulguard')
+  const mods = collectMods(s)
+  const firstRoundBonus = mods.firstRoundMult
+  const bloodlust = mods.flags.bloodlust
+  const militiaAll = mods.flags.militiaAll
+  const enemyDmgMult = mods.enemyDmgMult
   const hasThorns = modIds.includes('thorns')
   const hasFrenzy = modIds.includes('frenzy')
   const hasChaos = modIds.includes('chaos')
@@ -1377,7 +1290,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
       let enemyFrenzyMult = 1
       if (hasFrenzy) enemyFrenzyMult = 1 + kills * 0.05
       let enemyDmg = enemies.reduce((sum, e) => sum + e.atk, 0) * enemyFrenzyMult
-      enemyDmg = Math.round(enemyDmg * (0.9 + rnd() * 0.2) * (discipline ? 0.9 : 1))
+      enemyDmg = Math.round(enemyDmg * (0.9 + rnd() * 0.2) * enemyDmgMult)
 
       // ---- 我方伤亡统计（英魂庇护前） ----
       const beforeUnits = units.map((u) => ({ ...u }))
@@ -1421,13 +1334,14 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
     if (lost > 0) report.soldiersLost[id] = lost
   })
 
-  if (soulguard) {
+  // 战后复活/挽回链（英魂庇护等）
+  for (const ratio of mods.reviveRatios) {
     ;(['militia', 'archer', 'knight', 'warlord'] as UnitId[]).forEach((id) => {
       const lost = report.soldiersLost[id] ?? 0
-      const revived = Math.floor(lost * 0.3)
+      const revived = Math.floor(lost * ratio)
       if (revived > 0) {
         survivors[id] += revived
-        report.soldiersRevived[id] = revived
+        report.soldiersRevived[id] = (report.soldiersRevived[id] ?? 0) + revived
       }
     })
   }
@@ -1437,9 +1351,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
   let ns: GameState = { ...s, rng: dungeonRng.getState(), soldiers: survivors }
 
   if (report.won) {
-    let honor = floorDef.honor
-    if (hasSkill(ns, 'mi_honor')) honor += 1
-    if (hasSkill(ns, 'co_war_economy')) honor += 1
+    const honor = floorDef.honor + mods.honorPerWin
     report.honorGained = honor
     ns = {
       ...ns,
