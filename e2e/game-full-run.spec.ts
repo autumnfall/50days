@@ -123,7 +123,7 @@ test('智能动态策略 - 50回合完整通关', async ({ page }) => {
     // 贪心花资源（每日限训1个士兵）
     const trainedToday = { count: 0 }
     const dayActions: string[] = []
-    const { spent } = await spendGreedily(page, buildActions(page, trainedToday, turn), {
+    await spendGreedily(page, buildActions(page, trainedToday, turn), {
       onSpend: (a) => {
         dayActions.push(a.label)
         if (a.label.startsWith('训')) trainedToday.count++

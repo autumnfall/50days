@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { RESOURCE_INFO, type ResourceId } from '@/game/config'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 
 /** 资源花费标签 */
@@ -38,5 +39,47 @@ export function Panel({ title, icon, children, className, extra, ...rest }: {
       </header>
       <div className="p-3">{children}</div>
     </section>
+  )
+}
+
+/** 移动端可点击展开的提示；桌面端仍使用原生 title 悬停 */
+export function MobileTooltip({ content, children, className }: {
+  content: string
+  children: ReactNode
+  className?: string
+}) {
+  const isMobile = useIsMobile()
+  const [open, setOpen] = useState(false)
+
+  if (!isMobile) {
+    return (
+      <span className={className} title={content}>
+        {children}
+      </span>
+    )
+  }
+
+  return (
+    <>
+      <span
+        className={cn('cursor-pointer', className)}
+        onClick={(e) => { e.stopPropagation(); setOpen(true) }}
+      >
+        {children}
+      </span>
+      {open && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="max-w-xs rounded-xl border border-stone-600 bg-stone-900 p-4 text-sm text-stone-200 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {content}
+          </div>
+        </div>
+      )}
+    </>
   )
 }

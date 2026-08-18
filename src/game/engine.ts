@@ -751,8 +751,13 @@ function offerBlessing(s: GameState): GameState {
       : '远征途中，神秘的力量向你伸出橄榄枝。择一祝福，它将指引你走得更远。',
     choices: picks.map((b) => ({ id: b.id, label: `${b.icon} ${b.name}`, desc: b.desc, effect: b.effect })),
   }
-  // 普通祝福的数值随天数线性缩放，遗物保持原效果
+  // 普通祝福的数值随天数线性缩放，遗物保持原效果；遗物选项保留含具体效果的原始描述
   const event = scaleEvent(rawEvent, ns.day)
+  event.choices = event.choices.map((c) => {
+    const original = picks.find((b) => b.id === c.id)
+    if (original?.effect.relic) return { ...c, desc: original.desc }
+    return c
+  })
   ns = { ...ns, pendingEvent: { event }, run: { ...ns.run!, blessingsReceived: blessingCount } }
   return { ...ns, log: pushLog(ns, '🎁 远征祝福降临，请择一而行', 'event') }
 }

@@ -1,5 +1,6 @@
 import { BUILDINGS, type BuildingId } from '@/game/config'
 import type { GameState } from '@/game/engine'
+import { MobileTooltip } from './ui-bits'
 
 /** 村庄全景：把建筑与军队可视化 */
 export default function VillageView({ state }: { state: GameState }) {
@@ -52,17 +53,17 @@ export default function VillageView({ state }: { state: GameState }) {
           const def = BUILDINGS[id]
           const lv = b[id]
           return (
-            <div
-              key={id}
-              className={`rounded-lg px-1.5 py-1.5 text-center ${lv > 0 ? 'bg-stone-800/70' : 'bg-stone-950/40 opacity-45'}`}
-              title={def.desc}
-            >
-              <div className="text-lg leading-none">{def.icon}</div>
-              <div className="mt-1 text-[10px] text-stone-400">{def.name}</div>
-              <div className={`text-[11px] font-bold ${lv > 0 ? 'text-amber-300' : 'text-stone-600'}`}>
-                {id === 'barracks' ? (lv > 0 ? `Lv${lv}` : '—') : lv > 0 ? `×${lv}` : '—'}
+            <MobileTooltip key={id} content={def.desc}>
+              <div
+                className={`rounded-lg px-1.5 py-1.5 text-center ${lv > 0 ? 'bg-stone-800/70' : 'bg-stone-950/40 opacity-45'}`}
+              >
+                <div className="text-lg leading-none">{def.icon}</div>
+                <div className="mt-1 text-[10px] text-stone-400">{def.name}</div>
+                <div className={`text-[11px] font-bold ${lv > 0 ? 'text-amber-300' : 'text-stone-600'}`}>
+                  {id === 'barracks' ? (lv > 0 ? `Lv${lv}` : '—') : lv > 0 ? `×${lv}` : '—'}
+                </div>
               </div>
-            </div>
+            </MobileTooltip>
           )
         })}
       </div>

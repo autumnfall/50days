@@ -118,7 +118,6 @@ export async function dismissBattle(page: Page) {
 export async function dismissEvent(page: Page, choiceIndex = 0) {
   const modal = page.getByText('随机事件')
   if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-    const choices = page.locator('button').filter({ hasText: /.+/ })
     const eventButtons = page.locator('[class*="fixed"] button:not([disabled])')
     const count = await eventButtons.count()
     if (count > choiceIndex) {
@@ -444,7 +443,7 @@ export async function calculateDayStrategy(page: Page, turn: number): Promise<Da
       phase: 'economy',
       buildPriority: ['民居', '农场', '伐木场', '矿场'],
       trainPriority: [],
-      assignment: calculateEconomyAssignment(pop, popCap),
+      assignment: calculateEconomyAssignment(pop),
       shouldRecruit: pop < popCap,
     }
   }
@@ -458,7 +457,7 @@ export async function calculateDayStrategy(page: Page, turn: number): Promise<Da
       phase: 'economy',
       buildPriority: ['民居', '农场', '伐木场', '矿场'],
       trainPriority: [],
-      assignment: calculateEconomyAssignment(pop, popCap),
+      assignment: calculateEconomyAssignment(pop),
       shouldRecruit: pop < popCap,
     }
   } else if (powerRatio >= 1.5) {
@@ -467,7 +466,7 @@ export async function calculateDayStrategy(page: Page, turn: number): Promise<Da
       phase: 'economy',
       buildPriority: ['民居', '农场', '伐木场', '矿场', '箭塔', '城墙'],
       trainPriority: ['民兵'],
-      assignment: calculateEconomyAssignment(pop, popCap),
+      assignment: calculateEconomyAssignment(pop),
       shouldRecruit: pop < popCap,
     }
   } else if (powerRatio < 0.8) {
@@ -476,7 +475,7 @@ export async function calculateDayStrategy(page: Page, turn: number): Promise<Da
       phase: 'military',
       buildPriority: ['兵营', '箭塔', '城墙'],
       trainPriority: ['民兵', '弓箭手', '骑士'],
-      assignment: calculateMilitaryAssignment(pop, popCap),
+      assignment: calculateMilitaryAssignment(pop),
       shouldRecruit: false, // 不招募，专注训练
     }
   } else {
@@ -485,14 +484,14 @@ export async function calculateDayStrategy(page: Page, turn: number): Promise<Da
       phase: 'military',
       buildPriority: ['兵营', '箭塔', '城墙', '民居', '农场', '伐木场', '矿场'],
       trainPriority: ['民兵', '弓箭手', '骑士'],
-      assignment: calculateMilitaryAssignment(pop, popCap),
+      assignment: calculateMilitaryAssignment(pop),
       shouldRecruit: pop < popCap,
     }
   }
 }
 
 /** 经济优先分配：食物60%，木材30%，金币10% */
-function calculateEconomyAssignment(pop: number, popCap: number): { food: number; wood: number; gold: number } {
+function calculateEconomyAssignment(pop: number): { food: number; wood: number; gold: number } {
   const available = pop
   const food = Math.floor(available * 0.6)
   const gold = Math.floor(available * 0.1)
@@ -501,7 +500,7 @@ function calculateEconomyAssignment(pop: number, popCap: number): { food: number
 }
 
 /** 军事优先分配：食物40%，木材20%，金币40%（需要大量金币训练士兵） */
-function calculateMilitaryAssignment(pop: number, popCap: number): { food: number; wood: number; gold: number } {
+function calculateMilitaryAssignment(pop: number): { food: number; wood: number; gold: number } {
   const available = pop
   const food = Math.floor(available * 0.4)
   const gold = Math.floor(available * 0.4)

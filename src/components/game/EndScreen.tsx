@@ -2,6 +2,7 @@ import type { GameState } from '@/game/engine'
 import { TALENT_POINT_CAP, type SettleResult } from '@/game/meta'
 import { formatSeed } from '@/game/rng'
 import { getRelic } from '@/game/relics'
+import { MobileTooltip } from '@/components/game/ui-bits'
 
 export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, onLoad }: { state: GameState; settleInfo?: SettleResult | null; onRestart: () => void; onRetrySeed?: () => void; onLoad?: (slot: number) => void }) {
   const victory = state.phase === 'victory'
@@ -55,9 +56,9 @@ export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, o
             {state.run.relics.map((id) => {
               const r = getRelic(id)
               return r ? (
-                <span key={id} title={`${r.name}：${r.desc}`} className="rounded-lg border border-purple-800/50 bg-purple-950/30 px-2 py-1 text-[11px] text-purple-200">
+                <MobileTooltip key={id} content={`${r.name}：${r.desc}`} className="rounded-lg border border-purple-800/50 bg-purple-950/30 px-2 py-1 text-[11px] text-purple-200">
                   {r.icon} {r.name}
-                </span>
+                </MobileTooltip>
               ) : null
             })}
           </div>

@@ -111,6 +111,7 @@ export default function DungeonResultModal({
                     }`}
                   >
                     {m.icon} {m.name}
+                    <span className="text-[10px] opacity-70">· {m.desc}</span>
                   </span>
                 ))}
               </div>

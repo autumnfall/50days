@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 import {
-  startGame, endTurn, endTurnAndResolve, dismissBattle, dismissAllModals,
-  assignVillagers, buildBuilding, recruit, recruitMax, trainUnit,
-  getDay, skipTutorialIfVisible, getEndTurnButton,
+  startGame, endTurnAndResolve, dismissAllModals,
+  buildBuilding, recruit, trainUnit,
+  getDay, getEndTurnButton,
 } from './game-helpers'
 
 test.describe('农业国前10回合', () => {
@@ -28,7 +28,7 @@ test.describe('农业国前10回合', () => {
 
     // 继续3回合
     for (let i = 0; i < 3 && alive; i++) {
-      try { await recruit(page).catch(() => {}) } catch {}
+      try { await recruit(page).catch(() => {}) } catch { /* 资源不足或动作失败，忽略 */ }
       alive = await endTurnAndResolve(page)
     }
 
@@ -57,13 +57,13 @@ test.describe('军事国前10回合', () => {
 
     let alive = true
     for (let i = 0; i < actions.length && alive; i++) {
-      try { await actions[i]() } catch {}
+      try { await actions[i]() } catch { /* 资源不足或动作失败，忽略 */ }
       alive = await endTurnAndResolve(page)
     }
 
     // 继续几回合
     for (let i = 0; i < 3 && alive; i++) {
-      try { await recruit(page).catch(() => {}) } catch {}
+      try { await recruit(page).catch(() => {}) } catch { /* 资源不足或动作失败，忽略 */ }
       alive = await endTurnAndResolve(page)
     }
 
