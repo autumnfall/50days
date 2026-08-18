@@ -28,7 +28,7 @@ function TalentNode({
       disabled={!clickable}
       title={`${def.name}（${def.cost} 点）\n${def.desc}${!active && !check.ok ? `\n🔒 ${check.reason}` : ''}`}
       className={cn(
-        'w-full rounded-lg border px-2 py-1.5 text-left transition',
+        'w-full rounded-lg border px-3 py-2.5 text-left transition sm:px-2 sm:py-1.5',
         active
           ? def.mechanic
             ? 'border-purple-500 bg-purple-950/40 shadow-sm shadow-purple-500/20'
@@ -38,16 +38,16 @@ function TalentNode({
             : 'cursor-not-allowed border-stone-800 bg-stone-950/30 opacity-40',
       )}
     >
-      <div className="flex items-center gap-1.5">
-        <span className="text-base">{def.icon}</span>
-        <span className={cn('flex-1 truncate text-[11px] font-bold', active ? 'text-amber-200' : 'text-stone-300')}>
+      <div className="flex items-center gap-2">
+        <span className="text-lg sm:text-base">{def.icon}</span>
+        <span className={cn('flex-1 text-sm font-bold sm:flex-1 sm:truncate sm:text-[11px]', active ? 'text-amber-200' : 'text-stone-300')}>
           {def.name}
         </span>
-        <span className={cn('text-[10px] font-bold', active ? 'text-amber-400' : 'text-stone-500')}>
+        <span className={cn('text-xs font-bold sm:text-[10px]', active ? 'text-amber-400' : 'text-stone-500')}>
           {active ? '✓' : `${def.cost}点`}
         </span>
       </div>
-      <div className="mt-0.5 text-[10px] leading-snug text-stone-500">{def.desc}</div>
+      <div className="mt-1 text-xs leading-relaxed text-stone-500 sm:mt-0.5 sm:text-[10px] sm:leading-snug">{def.desc}</div>
     </button>
   )
 }
@@ -97,10 +97,10 @@ function TalentTree({ meta, setMeta }: { meta: MetaState; setMeta: (m: MetaState
           还没有传承点——完成一局游戏（无论胜负）即可获得，用来激活局外天赋。
         </p>
       ) : (
-        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {TALENT_BRANCH_ORDER.map((branch) => (
-            <div key={branch} className="space-y-1.5">
-              <div className="text-center text-[11px] font-bold tracking-widest text-stone-400">
+            <div key={branch} className="space-y-2">
+              <div className="text-center text-sm font-bold tracking-widest text-stone-400 sm:text-[11px]">
                 {TALENT_BRANCH_INFO[branch].icon} {TALENT_BRANCH_INFO[branch].name}
               </div>
               {TALENTS.filter((t) => t.branch === branch).map((def) => (
