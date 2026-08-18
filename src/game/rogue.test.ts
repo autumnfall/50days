@@ -171,6 +171,20 @@ describe('无尽波次与战场词条', () => {
     // count 可能受词条 swarm 影响，这里断言不低于基础 × 天数系数（词条只增不减）
     expect(ns.battle!.wave.count).toBeGreaterThanOrEqual(Math.round(base.count * scale))
   })
+
+  it('Boss 日未能击退黑暗领主则直接判负', () => {
+    let s = startRogue(7)
+    s = {
+      ...s,
+      day: CONFIG.rogue.bossInterval - 1,
+      soldiers: { militia: 0, archer: 0, knight: 0, warlord: 0 },
+      resources: { food: 99999, wood: 9999, gold: 9999 },
+    }
+    const ns = endTurn(s)
+    expect(ns.day).toBe(CONFIG.rogue.bossInterval)
+    expect(ns.phase).toBe('defeat')
+    expect(ns.defeatReason).toContain('黑暗领主')
+  })
 })
 
 describe('肉鸽结算', () => {

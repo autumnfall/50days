@@ -805,7 +805,18 @@ function resolveRogueWave(s: GameState, newDay: number): GameState {
       ? `💀 黑暗领主亲率大军压境！（${modifier.icon} ${modifier.name}：${modifier.desc}）`
       : `📯 敌情突现！第 ${ns.wavesFaced + 1} 波敌军来袭！（战场词条：${modifier.icon} ${modifier.name}）`, 'battle'),
   }
-  return resolveBattle(ns, wave, modifier)
+  const afterBattle = resolveBattle(ns, wave, modifier)
+  // 无尽远征：黑暗领主 Boss 波必须击退，否则远征直接结束
+  if (isBossDay && afterBattle.phase === 'battle' && !afterBattle.battle?.won) {
+    return {
+      ...afterBattle,
+      phase: 'defeat',
+      defeatReason: '未能击退黑暗领主，远征就此终结。',
+      battle: null,
+      log: pushLog(afterBattle, '☠️ 黑暗领主踏平了营地……', 'bad'),
+    }
+  }
+  return afterBattle
 }
 
 // ---------------- 收入预览 ----------------
