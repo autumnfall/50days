@@ -4,6 +4,15 @@ import { cn } from '@/lib/utils'
 
 interface Pos { top: number; left: number; width: number; height: number }
 
+/** 取当前可视视口尺寸（优先 visualViewport，适配地址栏动态显隐） */
+function getViewport(): { width: number; height: number } {
+  const vv = window.visualViewport
+  if (vv) {
+    return { width: vv.width, height: vv.height }
+  }
+  return { width: window.innerWidth, height: window.innerHeight }
+}
+
 export default function TutorialOverlay({
   step,
   onNext,
@@ -28,22 +37,35 @@ export default function TutorialOverlay({
     return [...els].find((e) => e.getClientRects().length > 0) ?? null
   }
 
-  const updatePos = () => {
+  /** 仅测量目标位置（用于 resize / scroll，不再触发滚动） */
+  const measureTarget = () => {
+    const el = findTarget()
+    if (!el) {
+      setTargetPos(null)
+      return
+    }
+    const r = el.getBoundingClientRect()
+    setTargetPos({ top: r.top, left: r.left, width: r.width, height: r.height })
+  }
+
+  /** 步骤切换时：滚动到目标并测量（instant 避免 smooth 滚动期间坐标失效） */
+  const scrollAndMeasure = () => {
     const el = findTarget()
     if (!el) {
       // 目标可能还未渲染（如 Tab 切换动画），最多重试几次
       if (retryRef.current < 5) {
         retryRef.current += 1
-        window.requestAnimationFrame(updatePos)
+        window.requestAnimationFrame(scrollAndMeasure)
       } else {
         setTargetPos(null)
       }
       return
     }
     retryRef.current = 0
+    const { width: vw } = getViewport()
+    const isMobile = vw < 1024
     // 移动端面板通常较高，优先把目标顶部露出来，便于用户向下滚动查看完整内容
-    const isMobile = window.innerWidth < 1024
-    el.scrollIntoView({ block: isMobile ? 'start' : 'center', behavior: 'smooth' })
+    el.scrollIntoView({ block: isMobile ? 'start' : 'center', behavior: 'instant' })
     // 移动端有固定 Header（h-14 = 56px），需要额外往下滚动一点，避免目标被 Header 遮住
     if (isMobile) {
       window.scrollBy({ top: -64, behavior: 'auto' })
@@ -55,26 +77,43 @@ export default function TutorialOverlay({
   // 切换步骤时先清空旧位置，避免一闪而过的旧 tooltip
   useLayoutEffect(() => {
     retryRef.current = 0
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTargetPos(null)
     setTooltipStyle({})
-    updatePos()
+    scrollAndMeasure()
   }, [step, current.target])
 
   useEffect(() => {
-    window.addEventListener('resize', updatePos)
-    window.addEventListener('scroll', updatePos, true)
-    return () => { window.removeEventListener('resize', updatePos); window.removeEventListener('scroll', updatePos, true) }
+    const vv = window.visualViewport
+    const onResize = () => measureTarget()
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onResize, true)
+    vv?.addEventListener('resize', onResize)
+    vv?.addEventListener('scroll', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onResize, true)
+      vv?.removeEventListener('resize', onResize)
+      vv?.removeEventListener('scroll', onResize)
+    }
   }, [step])
 
   // 根据目标位置和提示卡实际尺寸，计算安全的绝对定位（确保不溢出视口）
   useLayoutEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!targetPos) { setTooltipStyle({}); return }
     const tooltip = tooltipRef.current
-    const vw = window.innerWidth
-    const vh = window.innerHeight
+    const { width: vw, height: vh } = getViewport()
     const isMobile = vw < 1024
     const gap = 12
     const padding = 8
+    const headerRoom = isMobile ? 64 : 8 // 移动端给固定 Header 留空间
+
+    // 估算 tooltip 尺寸（未渲染时按默认宽度给初值，随后会重算）
+    const estimateRect = (): { width: number; height: number } => {
+      if (tooltip) return tooltip.getBoundingClientRect()
+      return { width: Math.min(340, vw - 2 * padding), height: 120 }
+    }
 
     let p = current.placement ?? 'bottom'
     // 窄屏上左/右放置必然溢出：按目标在屏幕的上/下半部改为下方/上方
@@ -82,47 +121,84 @@ export default function TutorialOverlay({
       p = targetPos.top + targetPos.height / 2 < vh / 2 ? 'bottom' : 'top'
     }
 
-    const place = (): { top: number; left: number; transform: string } => {
-      const centerX = targetPos.left + targetPos.width / 2
-      const clampedX = Math.min(Math.max(centerX, 176), Math.max(176, vw - 176))
+    // 移动端目标过高时，放弃贴边，改用顶部横幅式提示，确保内容完整可见
+    const targetTooTall = isMobile && targetPos.height > vh * 0.5
+
+    const clampCenterX = (centerX: number, rectW: number): number => {
+      const half = rectW / 2
+      return Math.min(Math.max(centerX, padding + half), Math.max(padding + half, vw - padding - half))
+    }
+
+    const place = (rectW: number): { top: number; left: number; transform: string } => {
+      const centerX = clampCenterX(targetPos.left + targetPos.width / 2, rectW)
+      if (targetTooTall) {
+        return { top: headerRoom + padding, left: vw / 2, transform: 'translateX(-50%)' }
+      }
       switch (p) {
-        case 'bottom': return { top: targetPos.top + targetPos.height + gap, left: clampedX, transform: 'translateX(-50%)' }
-        case 'top': return { top: targetPos.top - gap, left: clampedX, transform: 'translate(-50%, -100%)' }
+        case 'bottom': return { top: targetPos.top + targetPos.height + gap, left: centerX, transform: 'translateX(-50%)' }
+        case 'top': return { top: targetPos.top - gap, left: centerX, transform: 'translate(-50%, -100%)' }
         case 'right': return { top: targetPos.top + targetPos.height / 2, left: targetPos.left + targetPos.width + gap, transform: 'translateY(-50%)' }
         case 'left': return { top: targetPos.top + targetPos.height / 2, left: targetPos.left - gap, transform: 'translate(-100%, -50%)' }
       }
     }
 
-    const initial = place()
-    if (!tooltip) { setTooltipStyle(initial); return }
-
-    const rect = tooltip.getBoundingClientRect()
+    const rect = estimateRect()
+    const initial = place(rect.width)
     let top = initial.top
     let left = initial.left
+    let transform = initial.transform
+
+    // 根据 transform 计算 tooltip 实际占用的垂直区间
+    const getVerticalSpan = (t: string, y: number): [number, number] => {
+      if (t.includes('translateY(-100%)') || (t.includes('-100%') && t.includes('translate') && !t.includes('translateX'))) {
+        return [y - rect.height, y]
+      }
+      return [y, y + rect.height]
+    }
+
+    let [spanTop, spanBottom] = getVerticalSpan(transform, top)
 
     // 垂直方向：若溢出则翻转；翻转后仍溢出则钳制到安全区域
-    if (top < padding) {
-      if (p === 'top') {
+    if (spanTop < headerRoom + padding) {
+      if (!targetTooTall && (p === 'top' || transform.includes('-100%'))) {
         top = targetPos.top + targetPos.height + gap
+        transform = 'translateX(-50%)'
       }
-      top = Math.max(padding, top)
+      [spanTop, spanBottom] = getVerticalSpan(transform, top)
+      if (spanTop < headerRoom + padding) {
+        top = headerRoom + padding + (transform.includes('-100%') ? rect.height : 0)
+      }
     }
-    if (top + rect.height > vh - padding) {
-      if (p === 'bottom') {
-        top = targetPos.top - gap - rect.height
+    if (spanBottom > vh - padding) {
+      if (!targetTooTall && (p === 'bottom' || !transform.includes('-100%'))) {
+        top = targetPos.top - gap
+        transform = 'translate(-50%, -100%)'
       }
-      top = Math.min(top, vh - padding - rect.height)
+      [spanTop, spanBottom] = getVerticalSpan(transform, top)
+      if (spanBottom > vh - padding) {
+        top = vh - padding - (transform.includes('-100%') ? 0 : rect.height)
+      }
     }
 
     // 水平方向钳制
-    if (left - rect.width / 2 < padding) {
-      left = padding + rect.width / 2
-    }
-    if (left + rect.width / 2 > vw - padding) {
-      left = vw - padding - rect.width / 2
+    const halfW = rect.width / 2
+    if (transform.includes('translateX(-50%)')) {
+      if (left - halfW < padding) left = padding + halfW
+      if (left + halfW > vw - padding) left = vw - padding - halfW
+    } else if (transform.includes('translate(-100%')) {
+      if (left - rect.width < padding) left = padding + rect.width
+    } else if (transform.includes('translateY(-50%)')) {
+      if (left + rect.width > vw - padding) {
+        left = targetPos.left - gap - rect.width
+        transform = 'translate(-100%, -50%)'
+        if (left - rect.width < padding) {
+          left = vw / 2
+          transform = 'translateX(-50%)'
+        }
+      }
     }
 
-    setTooltipStyle({ top, left, transform: initial.transform })
+    setTooltipStyle({ top, left, transform })
   }, [targetPos, current.placement])
 
   // 将覆盖层上的滚动/滑动事件转发给底层页面，让用户在教程期间仍能上下滚动查看面板内容
@@ -148,7 +224,7 @@ export default function TutorialOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-[60]"
+      className="fixed inset-x-0 top-0 z-[60] h-dvh"
       onWheel={onWheel}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -181,7 +257,7 @@ export default function TutorialOverlay({
         ref={tooltipRef}
         style={tooltipStyle}
         className={cn(
-          'pointer-events-auto absolute z-10 flex max-h-[80vh] w-[340px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-amber-600/40 bg-stone-900/95 p-5 shadow-2xl backdrop-blur-sm',
+          'pointer-events-auto absolute z-10 flex max-h-[70dvh] w-[340px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-amber-600/40 bg-stone-900/95 p-5 shadow-2xl backdrop-blur-sm',
           isCentered && 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
         )}
       >

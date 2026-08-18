@@ -9,7 +9,7 @@ export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, o
   const daysHeld = isRogue ? state.day : Math.min(state.day, 50)
   return (
     <div
-      className={`relative flex min-h-screen items-center justify-center px-4 ${
+      className={`relative flex min-h-dvh items-center justify-center px-4 ${
         victory
           ? 'bg-gradient-to-b from-amber-950/60 via-stone-950 to-stone-950'
           : isRogue

@@ -160,7 +160,7 @@ export default function Game() {
   if (state.phase === 'victory' || state.phase === 'defeat') return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onRetrySeed={onRetrySeed} onLoad={onLoad} />
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-stone-950 text-stone-100">
+    <div className="flex min-h-dvh flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-stone-950 text-stone-100">
       <Header state={state} onOpenSaveLoad={onOpenSaveLoad} onTutorial={onTutorial} onHelp={onHelp} />
 
       {/* ============ 桌面端：三栏布局（lg 起） ============ */}

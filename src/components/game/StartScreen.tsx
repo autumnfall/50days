@@ -134,7 +134,7 @@ export default function StartScreen({ onStart, onLoad }: { onStart: (nation: Nat
   const [meta, setMeta] = useState<MetaState>(loadMeta)
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-b from-stone-950 via-stone-900 to-amber-950/40 px-4 py-8">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-gradient-to-b from-stone-950 via-stone-900 to-amber-950/40 px-4 py-8">
       <div className="pointer-events-none absolute inset-0 opacity-20 text-[12rem] leading-none select-none">
         <span className="absolute left-[8%] top-[12%]">🏰</span>
         <span className="absolute right-[10%] top-[18%]">🌲</span>
