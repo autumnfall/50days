@@ -229,6 +229,24 @@ describe('标准模式终局决战', () => {
     expect(ns.phase).toBe('defeat')
     expect(ns.defeatReason).toContain('终局')
   })
+
+  it('第 50 天终局 Boss 战胜后先展示战报，关闭战报后进入胜利', () => {
+    let s = chooseNation(createGame([], { mode: 'classic', seed: 7 }), 'military')
+    s = {
+      ...s,
+      day: CONFIG.totalDays - 1,
+      soldiers: { militia: 0, archer: 0, knight: 500, warlord: 0 },
+      resources: { food: 99999, wood: 9999, gold: 9999 },
+    }
+    const ns = endTurn(s)
+    expect(ns.day).toBe(CONFIG.totalDays)
+    expect(ns.phase).toBe('battle')
+    expect(ns.battle?.won).toBe(true)
+    expect(ns.defeatedFinalBoss).toBe(true)
+    const after = closeBattleReport(ns)
+    expect(after.phase).toBe('victory')
+    expect(after.battle).toBeNull()
+  })
 })
 
 describe('祝福池配置完整性', () => {

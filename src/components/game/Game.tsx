@@ -58,11 +58,11 @@ function EndTurnButton({ state, onEndTurn, className }: { state: GameState; onEn
         className,
       )}
     >
-      {state.mode === 'rogue' ? '结束回合 ⏭' : state.day >= CONFIG.totalDays ? '⚔️ 迎接终局决战' : '结束回合 ⏭'}
+      {state.mode === 'rogue' ? '结束回合 ⏭' : state.day >= CONFIG.totalDays - 1 ? '⚔️ 迎接终局决战' : '结束回合 ⏭'}
       <span className="block text-[11px] font-medium tracking-normal text-stone-800/80">
         {state.mode === 'rogue'
           ? `无尽远征 · 进入第 ${state.day + 1} 天${(state.day + 1) % CONFIG.rogue.blessingInterval === 0 ? '（🎁 远征祝福）' : ''}${(state.day + 1) % CONFIG.rogue.bossInterval === 0 ? '（💀 黑暗领主必来！）' : waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`
-          : state.day >= CONFIG.totalDays
+          : state.day >= CONFIG.totalDays - 1
             ? '终局 Boss 即将来袭，做好最后的准备！'
             : `结算采集与消耗，进入第 ${state.day + 1} 天${waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`}
       </span>

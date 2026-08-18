@@ -794,7 +794,9 @@ export function endTurn(s: GameState): GameState {
   }
 
   // 7. 胜利判定（必须击败终局 Boss；无尽远征没有胜利终点）
-  if (ns.mode !== 'rogue' && newDay >= CONFIG.totalDays && ns.defeatedFinalBoss) {
+  // 注意用 > 而非 >=：Boss 战胜后 resolveBattle 已将 phase 置为 'battle'，
+  // 须先让玩家看到终局决战战报，再由 closeBattleReport 转入 victory
+  if (ns.mode !== 'rogue' && newDay > CONFIG.totalDays && ns.defeatedFinalBoss) {
     return { ...ns, phase: 'victory', log: pushLog(ns, '🎉 黑暗大军被击溃！王国的援军抵达了！你守住了 50 天！', 'good') }
   }
   return ns
