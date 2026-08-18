@@ -108,7 +108,7 @@ export default function BattleModal({ report, onClose }: { report: BattleReport;
               return (
                 <p key={id} className="text-red-300">
                   💀 损失 {UNITS[id].icon} {UNITS[id].name} × {n}
-                  {revived > 0 && <span className="text-emerald-300">（💂 英魂庇护复活 {revived}）</span>}
+                  {revived > 0 && <span className="text-emerald-300">（💂 战后复活 {revived}）</span>}
                 </p>
               )
             })}

@@ -167,7 +167,7 @@ export default function DungeonResultModal({
                   return (
                     <span key={id} className="inline-flex items-center gap-1 rounded-lg bg-red-900/20 border border-red-800/30 px-2 py-1 text-xs text-red-300">
                       {UNIT_INFO[id].icon} -{lost}
-                      {revived > 0 && <span className="text-emerald-400">(复活{revived})</span>}
+                      {revived > 0 && <span className="text-emerald-400">(战后复活{revived})</span>}
                     </span>
                   )
                 })}
