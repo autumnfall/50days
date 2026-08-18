@@ -21,6 +21,8 @@ export interface RogueRun {
   seed: number
   /** 已获得的遗物 id（局内持久被动） */
   relics: string[]
+  /** 已收到的祝福次数（用于每 3 次一次遗物轮） */
+  blessingsReceived: number
 }
 
 export interface LogEntry {
@@ -139,7 +141,7 @@ export function createGame(talentIds: string[] = [], opts: CreateGameOptions = {
     phase: 'start',
     mode,
     rng: seed,
-    run: mode === 'rogue' ? { seed, relics: [] } : null,
+    run: mode === 'rogue' ? { seed, relics: [], blessingsReceived: 0 } : null,
     nation: null,
     day: 1,
     resources,
@@ -716,8 +718,16 @@ export function endTurn(s: GameState): GameState {
 
 /** 从祝福池加权抽 3 个不重复祝福（排除已拥有遗物的祝福），组装成挂起事件 */
 function offerBlessing(s: GameState): GameState {
+  if (!s.run) return s
   const { rnd, getState } = makeRng(s.rng)
-  const pool = BLESSINGS.filter((b) => !b.effect.relic || !hasRelic(s, b.effect.relic))
+
+  const blessingCount = s.run.blessingsReceived + 1
+  const isRelicRound = blessingCount % 3 === 0
+  const relicPool = BLESSINGS.filter((b) => b.effect.relic && !hasRelic(s, b.effect.relic))
+  const normalPool = BLESSINGS.filter((b) => !b.effect.relic)
+  // 遗物轮优先出遗物；若已集齐则 fallback 到普通祝福
+  const pool = isRelicRound && relicPool.length > 0 ? relicPool : normalPool
+
   const picks: typeof BLESSINGS = []
   const candidates = [...pool]
   while (picks.length < 3 && candidates.length > 0) {
@@ -733,12 +743,17 @@ function offerBlessing(s: GameState): GameState {
   }
   let ns: GameState = { ...s, rng: getState() }
   if (picks.length === 0) return ns
-  const event: GameEvent = {
+
+  const rawEvent: GameEvent = {
     id: 'blessing', icon: '🎁', title: '远征祝福', kind: 'good', weight: 1,
-    text: '远征途中，神秘的力量向你伸出橄榄枝。择一祝福，它将指引你走得更远。',
+    text: isRelicRound && relicPool.length > 0
+      ? '远古遗物的力量在远方闪烁，三件神器等待你的选择。'
+      : '远征途中，神秘的力量向你伸出橄榄枝。择一祝福，它将指引你走得更远。',
     choices: picks.map((b) => ({ id: b.id, label: `${b.icon} ${b.name}`, desc: b.desc, effect: b.effect })),
   }
-  ns = { ...ns, pendingEvent: { event } }
+  // 普通祝福的数值随天数线性缩放，遗物保持原效果
+  const event = scaleEvent(rawEvent, ns.day)
+  ns = { ...ns, pendingEvent: { event }, run: { ...ns.run!, blessingsReceived: blessingCount } }
   return { ...ns, log: pushLog(ns, '🎁 远征祝福降临，请择一而行', 'event') }
 }
 

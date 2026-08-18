@@ -18,7 +18,7 @@ function makeState(opts: {
   let s = createGame(opts.talents ?? [], { mode: opts.relics ? 'rogue' : 'classic', seed: 1 })
   if (opts.nation) s = chooseNation(s, opts.nation)
   s = { ...s, skills: new Set(opts.skills ?? []) }
-  if (opts.relics) s = { ...s, run: { seed: 1, relics: opts.relics } }
+  if (opts.relics) s = { ...s, run: { seed: 1, relics: opts.relics, blessingsReceived: 0 } }
   if (opts.upgrades) s = { ...s, upgrades: opts.upgrades }
   return s
 }
