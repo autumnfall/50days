@@ -71,11 +71,20 @@ export function MobileTooltip({ content, children, className }: {
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           onClick={() => setOpen(false)}
+          onPointerDown={() => setOpen(false)}
         >
           <div
-            className="max-w-xs rounded-xl border border-stone-600 bg-stone-900 p-4 text-sm text-stone-200 shadow-2xl"
+            className="relative max-w-xs rounded-xl border border-stone-600 bg-stone-900 p-4 text-sm text-stone-200 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
           >
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-stone-700 text-xs text-stone-300 shadow-md"
+              aria-label="关闭"
+            >
+              ✕
+            </button>
             {content}
           </div>
         </div>

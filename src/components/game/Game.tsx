@@ -21,6 +21,7 @@ import DungeonPanel from './DungeonPanel'
 import DungeonResultModal from './DungeonResultModal'
 import EndScreen from './EndScreen'
 import SkillTree from './SkillTree'
+import RelicPanel from './RelicPanel'
 import EventModal from './EventModal'
 import SaveLoadModal from './SaveLoadModal'
 import TutorialOverlay from './TutorialOverlay'
@@ -183,6 +184,7 @@ export default function Game() {
           >
             <SkillTree state={state} onUnlock={onUnlock} onBuyUpgrade={onBuyUpgrade} onExchange={onExchange} />
           </Panel>
+          {state.mode === 'rogue' && <RelicPanel state={state} />}
         </div>
       </main>
 
@@ -201,14 +203,17 @@ export default function Game() {
           <BuildPanel state={state} onBuild={onBuild} onRecruit={onRecruit} onRecruitMax={onRecruitMax} />
         )}
         {mobileTab === 'skill' && (
-          <Panel
-            title={`技能树 · ${state.nation ? NATIONS[state.nation].name : ''}`}
-            icon="✨"
-            data-tutorial="skill-tree"
-            extra={<span className="text-xs text-stone-400">荣耀 <b className="text-amber-300">🏅{state.honor}</b></span>}
-          >
-            <SkillTree state={state} onUnlock={onUnlock} onBuyUpgrade={onBuyUpgrade} onExchange={onExchange} />
-          </Panel>
+          <>
+            <Panel
+              title={`技能树 · ${state.nation ? NATIONS[state.nation].name : ''}`}
+              icon="✨"
+              data-tutorial="skill-tree"
+              extra={<span className="text-xs text-stone-400">荣耀 <b className="text-amber-300">🏅{state.honor}</b></span>}
+            >
+              <SkillTree state={state} onUnlock={onUnlock} onBuyUpgrade={onBuyUpgrade} onExchange={onExchange} />
+            </Panel>
+            <RelicPanel state={state} />
+          </>
         )}
       </main>
 

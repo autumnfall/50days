@@ -1,6 +1,5 @@
 import { CONFIG, NATIONS, RESOURCE_INFO, type ResourceId } from '@/game/config'
 import { armyPower, finalBossWave, foodUpkeep, nextWave, popCap, population, previewTurnIncome, rogueBossWave, soldierCount, waveChanceTomorrow, wavePower, type GameState } from '@/game/engine'
-import { getRelic } from '@/game/relics'
 import { MobileTooltip } from './ui-bits'
 import { cn } from '@/lib/utils'
 
@@ -63,20 +62,6 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
             </>
           )}
         </div>
-
-        {/* 遗物栏（肉鸽模式） */}
-        {isRogue && state.run && state.run.relics.length > 0 && (
-          <div className="flex flex-none items-center gap-1 rounded-lg border border-purple-800/50 bg-purple-950/30 px-2 py-1">
-            {state.run.relics.map((id) => {
-              const r = getRelic(id)
-              return r ? (
-                <MobileTooltip key={id} content={`${r.icon} ${r.name}：${r.desc}`}>
-                  <span className="text-sm">{r.icon}</span>
-                </MobileTooltip>
-              ) : null
-            })}
-          </div>
-        )}
 
         {/* 资源 */}
         <div className="flex flex-none items-center gap-2" data-tutorial="resources">
