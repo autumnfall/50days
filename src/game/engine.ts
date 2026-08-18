@@ -10,6 +10,11 @@ import {
 import { DUNGEON_FLOORS, DUNGEON_MODIFIERS, rollModifiers, type DungeonModifier } from './dungeon'
 import { nextRandom, randomSeed } from './rng'
 import { collectMods } from './effects'
+import {
+  applyBattleToHero, canActivateHeroSkill, canLearnActive, canLearnPassive, canUpgradeHero,
+  createHeroState, getHeroDef, heroUpgradeCost, heroXpNeeded, passiveValue,
+  type HeroState,
+} from './heroes'
 
 export type Phase = 'start' | 'playing' | 'battle' | 'dungeon_result' | 'victory' | 'defeat'
 
@@ -108,6 +113,8 @@ export interface GameState {
   defeatedFinalBoss: boolean
   /** 局外天赋：本局激活的天赋 id（开局注入，局内不可更改） */
   talents: string[]
+  /** 本局英雄（未招募为 null） */
+  hero: HeroState | null
   /** 地牢探险状态 */
   dungeon: {
     highestCleared: number
@@ -121,6 +128,8 @@ export interface GameState {
 export interface CreateGameOptions {
   mode?: GameMode
   seed?: number
+  /** 开局招募的英雄 id */
+  hero?: string
 }
 
 export function createGame(talentIds: string[] = [], opts: CreateGameOptions = {}): GameState {
@@ -136,6 +145,10 @@ export function createGame(talentIds: string[] = [], opts: CreateGameOptions = {
     : '你带领族人来到这片山谷，建立营地。坚守 50 天，等待王国援军！', kind: 'info' }]
   if (talentIds.length > 0) {
     log.push({ day: 1, text: `🌟 ${talentIds.length} 项局外天赋已生效，传承之力护佑着你`, kind: 'skill' })
+  }
+  const heroDef = opts.hero ? getHeroDef(opts.hero) : undefined
+  if (heroDef) {
+    log.push({ day: 1, text: `${heroDef.icon} 英雄 ${heroDef.name}（${heroDef.title}）加入了你的队伍！`, kind: 'skill' })
   }
   return {
     phase: 'start',
@@ -163,6 +176,7 @@ export function createGame(talentIds: string[] = [], opts: CreateGameOptions = {
     lastWaveDay: 2,
     defeatedFinalBoss: false,
     talents: [...talentIds],
+    hero: heroDef ? createHeroState(heroDef.id) : null,
     dungeon: { highestCleared: 0, dailyAttempted: false, pendingResult: null },
   }
 }
@@ -289,6 +303,60 @@ export function exchangeForHonor(s: GameState, res: ResourceId): GameState {
   }
   const names: Record<ResourceId, string> = { food: '食物', wood: '木材', gold: '金币' }
   return { ...ns, log: pushLog(ns, `🏅 以 ${cost} ${names[res]}献祭，换取 1 荣耀`, 'skill') }
+}
+
+// ---------------- 英雄 ----------------
+
+/** 英雄升级：经验达标后花费荣耀（n→n+1 需 n×2），每级获得 1 技能点 */
+export function upgradeHero(s: GameState): GameState {
+  if (s.phase !== 'playing' || !s.hero) return s
+  if (!canUpgradeHero(s.hero, s.honor).ok) return s
+  const cost = heroUpgradeCost(s.hero.level)
+  const hero: HeroState = { ...s.hero, level: s.hero.level + 1, xp: s.hero.xp - heroXpNeeded(s.hero.level) }
+  const name = getHeroDef(hero.id)?.name ?? '英雄'
+  return {
+    ...s,
+    honor: s.honor - cost,
+    hero,
+    log: pushLog(s, `🛡️ ${name} 升至 ${hero.level} 级！获得 1 技能点`, 'skill'),
+  }
+}
+
+/** 学习/强化被动技能（index 0~2），消耗 1 技能点 */
+export function learnHeroPassive(s: GameState, index: number): GameState {
+  if (s.phase !== 'playing' || !s.hero) return s
+  if (index < 0 || index > 2) return s
+  if (!canLearnPassive(s.hero, index).ok) return s
+  const passives = [...s.hero.passives] as [number, number, number]
+  passives[index] += 1
+  const def = getHeroDef(s.hero.id)
+  const p = def?.passives[index]
+  return {
+    ...s,
+    hero: { ...s.hero, passives },
+    log: pushLog(s, `🛡️ ${def?.name} 习得「${p?.name}」Lv${passives[index]}：${p ? p.desc(p.values[passives[index] - 1]) : ''}`, 'skill'),
+  }
+}
+
+/** 学习主动技能，消耗 1 技能点 */
+export function learnHeroActive(s: GameState): GameState {
+  if (s.phase !== 'playing' || !s.hero) return s
+  if (!canLearnActive(s.hero).ok) return s
+  const def = getHeroDef(s.hero.id)
+  return {
+    ...s,
+    hero: { ...s.hero, activeLearned: true },
+    log: pushLog(s, `🛡️ ${def?.name} 习得主动技「${def?.active.name}」！`, 'skill'),
+  }
+}
+
+/** 激活主动技：挂起至下一场战斗触发（不可叠加），并进入冷却 */
+export function activateHeroSkill(s: GameState): GameState {
+  if (s.phase !== 'playing' || !s.hero) return s
+  if (!canActivateHeroSkill(s.hero, s.day).ok) return s
+  const def = getHeroDef(s.hero.id)
+  const hero: HeroState = { ...s.hero, pendingSkill: true, skillCooldownUntil: s.day + (def?.active.cooldownDays ?? 5) }
+  return { ...s, hero, log: pushLog(s, `🏹「${def?.active.name}」已就绪：下一场战斗将伏击敌军！`, 'skill') }
 }
 
 // ---------------- 派生数据 ----------------
@@ -592,6 +660,11 @@ export function endTurn(s: GameState): GameState {
     income.wood += militiaBonus
     income.gold += militiaBonus
   }
+  // 英雄被动·屯田戍边：每座民居每日 +N 食物（固定值，不吃任何百分比加成）
+  if (ns.hero && ns.buildings.house > 0) {
+    const perHouse = passiveValue(ns.hero, 1)
+    if (perHouse > 0) income.food += ns.buildings.house * perHouse
+  }
 
   ns.resources.food += income.food
   ns.resources.wood += income.wood
@@ -640,6 +713,9 @@ export function endTurn(s: GameState): GameState {
   // 3. 天数推进
   const newDay = ns.day + 1
   ns = { ...ns, day: newDay }
+
+  // 3b. 英雄经验：每过一天 +1
+  if (ns.hero) ns = { ...ns, hero: { ...ns.hero, xp: ns.hero.xp + 1 } }
 
   // 4. 随机事件 / 远征祝福（挂起缩放副本，等待玩家抉择）
   const turnRng = makeRng(ns.rng)
@@ -862,6 +938,11 @@ export function previewTurnIncome(s: GameState): TurnPreview {
     woodGather += militiaBonus
     goldGather += militiaBonus
   }
+  // 英雄被动·屯田戍边（固定值，不吃百分比加成）
+  if (s.hero && s.buildings.house > 0) {
+    const perHouse = passiveValue(s.hero, 1)
+    if (perHouse > 0) foodGather += s.buildings.house * perHouse
+  }
 
   const goldAfterGather = s.resources.gold + goldGather
   const interestRate = mods.interestRateMax + mods.interestRateAdd
@@ -985,13 +1066,31 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
   const hasFrenzy = modId === 'frenzy'
   const hasChaos = modId === 'chaos'
 
+  // ---- 英雄主动技·大破匈奴：伏击（所有词条缩放之后最后生效，战败也消耗）----
+  let heroAmbush = false
+  if (ns.hero?.pendingSkill) {
+    const def = getHeroDef(ns.hero.id)
+    const cut = Math.ceil(enemyCount * (def?.active.ambushRatio ?? 0))
+    enemyCount = Math.max(1, enemyCount - cut)
+    heroAmbush = true
+    ns = {
+      ...ns,
+      hero: { ...ns.hero, pendingSkill: false },
+      log: pushLog(ns, `🏹 ${def?.active.name ?? '伏击'}！伏兵尽出，开战即歼灭 ${cut} 只敌军，敌方首轮陷入混乱！`, 'skill'),
+    }
+  }
+
   const enemies: Fighter[] = Array.from({ length: enemyCount }, () => ({ hp: enemyHp, atk: enemyAtk }))
+  // 英雄被动·久经沙场：全体士兵攻击 +战功×N%（仅士兵，不含箭塔/村民协防）
+  const heroAtkMult = ns.hero ? 1 + ns.hero.growth * passiveValue(ns.hero, 0) : 1
   const units: { id: UnitId; hp: number; atk: number }[] = []
   ;(['warlord', 'knight', 'archer', 'militia'] as UnitId[]).forEach((id) => {
     for (let i = 0; i < ns.soldiers[id]; i++) {
-      units.push({ id, hp: Math.round(unitHp(ns, id) * playerHpMult), atk: Math.round(unitAtk(ns, id) * playerAtkMult) })
+      units.push({ id, hp: Math.round(unitHp(ns, id) * playerHpMult), atk: Math.round(unitAtk(ns, id) * playerAtkMult * heroAtkMult) })
     }
   })
+  // 英雄被动·以少胜多：敌军数量超过我方士兵时，我方伤害 +N%
+  const heroOutnumMult = ns.hero && enemyCount > units.length ? 1 + passiveValue(ns.hero, 2) : 1
   let wallHp = ns.buildings.wall * wallAbsorb(ns)
   const towers = ns.buildings.tower
   const tDmg = towerDmg(ns)
@@ -1028,11 +1127,12 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
       // 我方伤害 = 士兵 + 箭塔 + 全民皆兵（村民协防）+ 嗜血
       let playerDmg = units.reduce((sum, u) => sum + u.atk, 0) + towers * tDmg + bloodlustStacks
       if (militiaAll) playerDmg += ns.villagers * 2
-      playerDmg = Math.round(playerDmg * (0.9 + rnd() * 0.2) * (round === 1 ? firstRoundBonus : 1))
+      playerDmg = Math.round(playerDmg * (0.9 + rnd() * 0.2) * (round === 1 ? firstRoundBonus : 1) * heroOutnumMult)
       if (hasChaos && round === 1) playerDmg = Math.round(playerDmg * 0.5)
       let enemyDmg = enemies.reduce((sum, e) => sum + e.atk, 0)
       if (hasFrenzy) enemyDmg *= 1 + kills * 0.05
       enemyDmg = Math.round(enemyDmg * (0.9 + rnd() * 0.2) * enemyDmgMult)
+      if (heroAmbush && round === 1) enemyDmg = 0 // 伏击：敌方首轮无法行动
 
       // 我方伤害 → 击杀敌人
       let dmg = playerDmg
@@ -1090,7 +1190,7 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
         enemyDmg,
         enemiesLeft: enemies.length,
         playerLeft: units.length,
-        note: note ?? thornNote ?? (bloodlust && roundKills > 0 && bloodlustStacks > 0 ? `🔥 嗜血 +${bloodlustStacks}` : undefined),
+        note: (heroAmbush && round === 1 ? '🏹 伏击：敌军首轮无法行动！' : undefined) ?? note ?? thornNote ?? (bloodlust && roundKills > 0 && bloodlustStacks > 0 ? `🔥 嗜血 +${bloodlustStacks}` : undefined),
       })
     }
   }
@@ -1174,6 +1274,18 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
     ns = { ...ns, log: pushLog(ns, `🔥 防线被突破！${raiders} 只敌人劫掠了村庄，${villagersLost} 名村民遇害`, 'bad') }
   }
 
+  // 英雄战功与经验结算：胜 → 战功+1、经验+1；败 → 战功-2（含被突破但未灭国）
+  if (ns.hero) {
+    const before = ns.hero.growth
+    const hero = applyBattleToHero(ns.hero, report.won)
+    ns = { ...ns, hero }
+    if (report.won) {
+      ns = { ...ns, log: pushLog(ns, `🛡️ 战功 +1（当前 ${hero.growth}），英雄经验 +1`, 'skill') }
+    } else if (hero.growth < before) {
+      ns = { ...ns, log: pushLog(ns, `🛡️ 战败，战功 -2（当前 ${hero.growth}）`, 'bad') }
+    }
+  }
+
   if (ns.villagers + soldierCount(ns) <= 0) {
     return {
       ...ns,
@@ -1217,6 +1329,14 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
   if (modIds.includes('berserk')) enemyAtk = Math.round(enemyAtk * 1.25 * 10) / 10
   if (modIds.includes('swarm')) enemyCount = Math.round(enemyCount * 1.4)
 
+  // ---- 英雄主动技·大破匈奴：伏击（所有词条缩放之后最后生效，战败也消耗）----
+  const heroAmbush = !!s.hero?.pendingSkill
+  if (heroAmbush) {
+    const def = getHeroDef(s.hero!.id)
+    const cut = Math.ceil(enemyCount * (def?.active.ambushRatio ?? 0))
+    enemyCount = Math.max(1, enemyCount - cut)
+  }
+
   const enemies: { hp: number; maxHp: number; atk: number }[] = Array.from(
     { length: enemyCount },
     () => ({ hp: enemyHp, maxHp: enemyHp, atk: enemyAtk }),
@@ -1228,6 +1348,8 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
   if (playerDebuff?.id === 'weakened') atkMult = 0.8
   if (playerDebuff?.id === 'fragile') hpMult = 0.75
 
+  // 英雄被动·久经沙场：全体士兵攻击 +战功×N%（仅士兵）
+  const heroAtkMult = s.hero ? 1 + s.hero.growth * passiveValue(s.hero, 0) : 1
   const units: { id: UnitId; hp: number; maxHp: number; atk: number }[] = []
   ;(['warlord', 'knight', 'archer', 'militia'] as UnitId[]).forEach((id) => {
     for (let i = 0; i < s.soldiers[id]; i++) {
@@ -1235,10 +1357,12 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
         id,
         hp: Math.round(unitHp(s, id) * hpMult),
         maxHp: Math.round(unitHp(s, id) * hpMult),
-        atk: Math.round(unitAtk(s, id) * atkMult),
+        atk: Math.round(unitAtk(s, id) * atkMult * heroAtkMult),
       })
     }
   })
+  // 英雄被动·以少胜多：敌军数量超过我方士兵时，我方伤害 +N%
+  const heroOutnumMult = s.hero && enemyCount > units.length ? 1 + passiveValue(s.hero, 2) : 1
 
   const mods = collectMods(s)
   const firstRoundBonus = mods.firstRoundMult
@@ -1275,6 +1399,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
       const rngMult = 0.9 + rnd() * 0.2
       playerDmg = Math.round(playerDmg * rngMult)
       if (round === 1) playerDmg = Math.round(playerDmg * firstRoundBonus)
+      playerDmg = Math.round(playerDmg * heroOutnumMult)
       if (hasChaos && round === 1) playerDmg = Math.round(playerDmg * 0.5)
       // 按比例缩放各兵种伤害
       const rawTotal = Object.values(unitDmgByType).reduce((a, b) => a + b!, 0)
@@ -1333,6 +1458,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
       if (hasFrenzy) enemyFrenzyMult = 1 + kills * 0.05
       let enemyDmg = enemies.reduce((sum, e) => sum + e.atk, 0) * enemyFrenzyMult
       enemyDmg = Math.round(enemyDmg * (0.9 + rnd() * 0.2) * enemyDmgMult)
+      if (heroAmbush && round === 1) enemyDmg = 0 // 伏击：敌方首轮无法行动
 
       // ---- 我方伤亡统计（英魂庇护前） ----
       const beforeUnits = units.map((u) => ({ ...u }))
@@ -1361,7 +1487,7 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
         enemyDmg: Math.round(enemyDmg),
         enemiesLeft: enemies.length,
         playerLeft: units.length,
-        note: thornNote ?? (bloodlust && roundKills > 0 && bloodlustStacks > 0 ? `🔥 嗜血 +${bloodlustStacks}` : undefined),
+        note: (heroAmbush && round === 1 ? '🏹 伏击：敌军首轮无法行动！' : undefined) ?? thornNote ?? (bloodlust && roundKills > 0 && bloodlustStacks > 0 ? `🔥 嗜血 +${bloodlustStacks}` : undefined),
         playerDmgByType: unitDmgByType,
         playerKillsByType: unitKillsByType,
         playerLostByType,
@@ -1391,6 +1517,23 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
   report.won = enemies.length === 0
 
   let ns: GameState = { ...s, rng: dungeonRng.getState(), soldiers: survivors }
+
+  // 英雄结算：消耗挂起的主动技；胜 → 战功+1、经验+1，败 → 战功-2
+  if (ns.hero) {
+    const consumed = heroAmbush ? { ...ns.hero, pendingSkill: false } : ns.hero
+    const before = consumed.growth
+    const hero = applyBattleToHero(consumed, report.won)
+    ns = { ...ns, hero }
+    const def = getHeroDef(hero.id)
+    if (heroAmbush) {
+      ns = { ...ns, log: [...ns.log, { day: ns.day, text: `🏹 ${def?.active.name}！伏兵尽出，敌军尚未列阵便已减员，首轮陷入混乱！`, kind: 'skill' as const }] }
+    }
+    if (report.won) {
+      ns = { ...ns, log: [...ns.log, { day: ns.day, text: `🛡️ 战功 +1（当前 ${hero.growth}），英雄经验 +1`, kind: 'skill' as const }] }
+    } else if (hero.growth < before) {
+      ns = { ...ns, log: [...ns.log, { day: ns.day, text: `🛡️ 地牢战败，战功 -2（当前 ${hero.growth}）`, kind: 'bad' as const }] }
+    }
+  }
 
   if (report.won) {
     const honor = floorDef.honor + mods.honorPerWin

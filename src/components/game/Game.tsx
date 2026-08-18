@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  applyEventChoice, assign, build, buyUpgrade, chooseNation, closeBattleReport, closeDungeonResult, createGame, endTurn,
-  enterDungeon, exchangeForHonor, recruit, recruitMax, train, unlockSkill, waveChanceTomorrow,
+  activateHeroSkill, applyEventChoice, assign, build, buyUpgrade, chooseNation, closeBattleReport, closeDungeonResult, createGame, endTurn,
+  enterDungeon, exchangeForHonor, learnHeroActive, learnHeroPassive, recruit, recruitMax, train, unlockSkill, upgradeHero, waveChanceTomorrow,
   type GameMode, type GameState,
 } from '@/game/engine'
 import { CONFIG, NATIONS, type BuildingId, type NationId, type ResourceId, type UnitId, type UpgradeId } from '@/game/config'
@@ -22,6 +22,7 @@ import DungeonResultModal from './DungeonResultModal'
 import EndScreen from './EndScreen'
 import SkillTree from './SkillTree'
 import RelicPanel from './RelicPanel'
+import HeroPanel from './HeroPanel'
 import EventModal from './EventModal'
 import SaveLoadModal from './SaveLoadModal'
 import TutorialOverlay from './TutorialOverlay'
@@ -80,7 +81,7 @@ export default function Game() {
   const [settleInfo, setSettleInfo] = useState<SettleResult | null>(null)
   const settledForRef = useRef<GameState | null>(null)
   /** 本局开局参数（肉鸽模式「同 seed 再战」用） */
-  const lastStartRef = useRef<{ nation: NationId; talents: string[]; mode: GameMode; seed?: number } | null>(null)
+  const lastStartRef = useRef<{ nation: NationId; talents: string[]; mode: GameMode; seed?: number; hero?: string } | null>(null)
   const refreshMeta = useCallback(() => setSaveMeta(getAllSaveMetadata()), [])
 
   // 局结束结算：传承点 + 生涯记录（每局只结算一次，ref 防 StrictMode 双写）
@@ -106,9 +107,9 @@ export default function Game() {
     }
   }, [])
 
-  const onStart = useCallback((nation: NationId, talents: string[], mode: GameMode, seed?: number) => {
-    lastStartRef.current = { nation, talents, mode, seed }
-    setState(chooseNation(createGame(talents, { mode, seed }), nation))
+  const onStart = useCallback((nation: NationId, talents: string[], mode: GameMode, seed?: number, heroId?: string) => {
+    lastStartRef.current = { nation, talents, mode, seed, hero: heroId }
+    setState(chooseNation(createGame(talents, { mode, seed, hero: heroId }), nation))
     if (!isTutorialCompleted()) setTutorialStep(0)
   }, [])
   const onRestart = useCallback(() => { settledForRef.current = null; setSettleInfo(null); setState(createGame()) }, [])
@@ -118,7 +119,7 @@ export default function Game() {
     settledForRef.current = null
     setSettleInfo(null)
     if (!last) { setState(createGame()); return }
-    setState(chooseNation(createGame(last.talents, { mode: last.mode, seed: last.seed }), last.nation))
+    setState(chooseNation(createGame(last.talents, { mode: last.mode, seed: last.seed, hero: last.hero }), last.nation))
   }, [])
   const onAssign = useCallback((res: ResourceId, delta: number) => setState((s) => assign(s, res, delta)), [])
   const onBuild = useCallback((id: BuildingId) => setState((s) => build(s, id)), [])
@@ -133,6 +134,10 @@ export default function Game() {
   const onChooseEvent = useCallback((choiceId: string) => setState((s) => applyEventChoice(s, choiceId)), [])
   const onEnterDungeon = useCallback((floor: number) => setState((s) => enterDungeon(s, floor)), [])
   const onCloseDungeonResult = useCallback(() => setState((s) => closeDungeonResult(s)), [])
+  const onUpgradeHero = useCallback(() => setState((s) => upgradeHero(s)), [])
+  const onLearnPassive = useCallback((index: number) => setState((s) => learnHeroPassive(s, index)), [])
+  const onLearnActive = useCallback(() => setState((s) => learnHeroActive(s)), [])
+  const onActivateHeroSkill = useCallback(() => setState((s) => activateHeroSkill(s)), [])
 
   const onSave = useCallback((slot: number) => { setState((s) => { saveGame(s, slot); return s }); refreshMeta() }, [refreshMeta])
   const onLoad = useCallback((slot: number) => { const loaded = loadGame(slot); if (loaded) setState(loaded) }, [])
@@ -184,6 +189,9 @@ export default function Game() {
           >
             <SkillTree state={state} onUnlock={onUnlock} onBuyUpgrade={onBuyUpgrade} onExchange={onExchange} />
           </Panel>
+          {state.hero && (
+            <HeroPanel state={state} onUpgrade={onUpgradeHero} onLearnPassive={onLearnPassive} onLearnActive={onLearnActive} onActivateSkill={onActivateHeroSkill} />
+          )}
           {state.mode === 'rogue' && <RelicPanel state={state} />}
         </div>
       </main>
@@ -212,6 +220,9 @@ export default function Game() {
             >
               <SkillTree state={state} onUnlock={onUnlock} onBuyUpgrade={onBuyUpgrade} onExchange={onExchange} />
             </Panel>
+            {state.hero && (
+              <HeroPanel state={state} onUpgrade={onUpgradeHero} onLearnPassive={onLearnPassive} onLearnActive={onLearnActive} onActivateSkill={onActivateHeroSkill} />
+            )}
             <RelicPanel state={state} />
           </>
         )}

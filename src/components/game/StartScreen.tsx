@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CONFIG, NATIONS, type NationId } from '@/game/config'
 import type { GameMode } from '@/game/engine'
+import { ACTIVE_UNLOCK_LEVEL, HEROES } from '@/game/heroes'
 import { formatSeed, randomSeed } from '@/game/rng'
 import {
   TALENTS, TALENT_BRANCH_INFO, TALENT_BRANCH_ORDER, TALENT_POINT_CAP,
@@ -127,8 +128,9 @@ const MODES: { id: GameMode; name: string; icon: string; tagline: string; desc: 
   },
 ]
 
-export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId, talents: string[], mode: GameMode, seed?: number) => void; onLoad?: (slot: number) => void }) {
+export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId, talents: string[], mode: GameMode, seed?: number, heroId?: string) => void; onLoad?: (slot: number) => void }) {
   const [selected, setSelected] = useState<NationId | null>(null)
+  const [hero, setHero] = useState<string | null>(null)
   const [mode, setMode] = useState<GameMode>('classic')
   const [seed, setSeed] = useState<number>(randomSeed)
   const [meta, setMeta] = useState<MetaState>(loadMeta)
@@ -248,11 +250,71 @@ export default function StartScreen({ onStart, onLoad }: { onStart: (nation: Nat
           })}
         </div>
 
+        {/* 英雄选择 */}
+        <h2 className="mt-7 text-center text-sm font-bold tracking-widest text-stone-400">— 选择你的英雄 —</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <button
+            onClick={() => setHero(null)}
+            className={cn(
+              'rounded-xl border-2 p-4 text-left transition',
+              hero === null
+                ? 'border-stone-400 bg-stone-800/60 shadow-lg'
+                : 'border-stone-700 bg-stone-950/50 hover:border-stone-500 hover:bg-stone-800/60',
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-3xl">🏕️</span>
+              <div>
+                <div className={cn('font-bold', hero === null ? 'text-stone-100' : 'text-stone-200')}>不招募英雄</div>
+                <div className="text-[10px] tracking-widest text-stone-500">原汁原味</div>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-stone-400">依靠文明与天赋作战，体验最经典的玩法。</p>
+          </button>
+          {HEROES.map((h) => {
+            const active = hero === h.id
+            return (
+              <button
+                key={h.id}
+                onClick={() => setHero(h.id)}
+                className={cn(
+                  'rounded-xl border-2 p-4 text-left transition',
+                  active
+                    ? 'border-sky-500 bg-sky-950/30 shadow-lg shadow-sky-500/10'
+                    : 'border-stone-700 bg-stone-950/50 hover:border-stone-500 hover:bg-stone-800/60',
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl">{h.icon}</span>
+                  <div>
+                    <div className={cn('font-bold', active ? 'text-sky-200' : 'text-stone-200')}>{h.name}</div>
+                    <div className="text-[10px] tracking-widest text-stone-500">{h.title}</div>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-stone-400">{h.desc}</p>
+                <ul className="mt-2 space-y-1">
+                  <li className="flex items-start gap-1 text-[11px] text-sky-300/90">
+                    <span className="text-sky-500">✦</span>{h.growthName}：{h.growthDesc}
+                  </li>
+                  {h.passives.map((p) => (
+                    <li key={p.id} className="flex items-start gap-1 text-[11px] text-sky-300/90">
+                      <span className="text-sky-500">✦</span>{p.name}：{p.desc(p.values[0])}
+                    </li>
+                  ))}
+                  <li className="flex items-start gap-1 text-[11px] text-amber-300/90">
+                    <span className="text-amber-500">✦</span>{h.active.name}（Lv{ACTIVE_UNLOCK_LEVEL} 解锁）：{h.active.desc}
+                  </li>
+                </ul>
+              </button>
+            )
+          })}
+        </div>
+
         {/* 局外天赋树 */}
         <TalentTree meta={meta} setMeta={setMeta} />
 
         <button
-          onClick={() => selected && onStart(selected, meta.talents, mode, mode === 'rogue' ? seed : undefined)}
+          onClick={() => selected && onStart(selected, meta.talents, mode, mode === 'rogue' ? seed : undefined, hero ?? undefined)}
           disabled={!selected}
           className={cn(
             'mt-7 w-full rounded-xl py-4 text-lg font-black tracking-[0.3em] transition active:scale-[0.98]',
