@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { RESOURCE_INFO, type ResourceId } from '@/game/config'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
@@ -42,7 +43,9 @@ export function Panel({ title, icon, children, className, extra, ...rest }: {
   )
 }
 
-/** 移动端可点击展开的提示；桌面端仍使用原生 title 悬停 */
+/** 移动端可点击展开的提示；桌面端仍使用原生 title 悬停。
+ *  弹出层通过 Portal 挂载到 body——否则祖先的 backdrop-blur/transform 会把
+ *  fixed 定位限制在祖先内，导致遮罩与关闭按钮错位、无法关闭。 */
 export function MobileTooltip({ content, children, className }: {
   content: string
   children: ReactNode
@@ -67,27 +70,32 @@ export function MobileTooltip({ content, children, className }: {
       >
         {children}
       </span>
-      {open && (
+      {open && createPortal(
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           onClick={() => setOpen(false)}
-          onPointerDown={() => setOpen(false)}
         >
           <div
-            className="relative max-w-xs rounded-xl border border-stone-600 bg-stone-900 p-4 text-sm text-stone-200 shadow-2xl"
+            className="relative w-full max-w-xs rounded-xl border border-stone-600 bg-stone-900 p-4 text-sm leading-relaxed text-stone-200 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setOpen(false)}
-              className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-stone-700 text-xs text-stone-300 shadow-md"
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-stone-700 text-sm text-stone-200 shadow-md active:scale-90"
               aria-label="关闭"
             >
               ✕
             </button>
-            {content}
+            <div className="whitespace-pre-line pr-9">{content}</div>
+            <button
+              onClick={() => setOpen(false)}
+              className="mt-4 w-full rounded-lg bg-stone-700 py-2 text-sm font-bold text-stone-100 transition active:scale-[0.98]"
+            >
+              关闭
+            </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )
