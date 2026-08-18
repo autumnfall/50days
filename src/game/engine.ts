@@ -166,7 +166,7 @@ export function createGame(talentIds: string[] = [], opts: CreateGameOptions = {
 }
 
 export function chooseNation(state: GameState, nation: NationId): GameState {
-  let s: GameState = { ...state, nation, phase: 'playing', resources: { ...state.resources } }
+  const s: GameState = { ...state, nation, phase: 'playing', resources: { ...state.resources } }
   if (nation === 'agriculture') {
     s.resources.food += 15
     s.log = [...s.log, { day: 1, text: '🌾 丰饶农耕国的族人开垦了沃土，开局食物 +15', kind: 'good' }]
@@ -673,7 +673,7 @@ export function endTurn(s: GameState): GameState {
 
   // 6. 波次判定
   if (ns.mode === 'rogue') {
-    ns = resolveRogueWave(ns, newDay, turnRng)
+    ns = resolveRogueWave(ns, newDay)
     if (ns.phase === 'defeat') return ns
   } else if (newDay >= CONFIG.totalDays) {
     // 终局 Boss：最后一天必定遭遇，固定第 20 波难度
@@ -689,10 +689,9 @@ export function endTurn(s: GameState): GameState {
     const waveRoll = waveRng.rnd()
     ns = { ...ns, rng: waveRng.getState() }
     if (chance > 0 && waveRoll < chance) {
-      const wave = getWave(ns.wavesFaced + 1)
+      let wave = getWave(ns.wavesFaced + 1)
       if (ns.omen) {
-        wave.count = Math.round(wave.count * 1.25)
-        wave.hpEach = Math.round(wave.hpEach * 1.2)
+        wave = { ...wave, count: Math.round(wave.count * 1.25), hpEach: Math.round(wave.hpEach * 1.2) }
       }
       ns = {
         ...ns,
@@ -750,12 +749,13 @@ export function rogueBossWave(day: number, wavesFaced: number): WaveInfo {
 }
 
 /** 无尽远征的波次判定：每 bossInterval 天必来强化 Boss，平时沿用随机波次并附带战场词条 */
-function resolveRogueWave(s: GameState, newDay: number, turnRng: { rnd: () => number; getState: () => number }): GameState {
+function resolveRogueWave(s: GameState, newDay: number): GameState {
+  const waveRng = makeRng(s.rng)
   let ns = s
   const isBossDay = newDay % CONFIG.rogue.bossInterval === 0
   const chance = waveChanceForDay(ns, newDay)
-  const roll = turnRng.rnd()
-  ns = { ...ns, rng: turnRng.getState() }
+  const roll = waveRng.rnd()
+  ns = { ...ns, rng: waveRng.getState() }
   if (!isBossDay && !(chance > 0 && roll < chance)) return ns
 
   let wave = isBossDay ? rogueBossWave(newDay, ns.wavesFaced) : getWave(ns.wavesFaced + 1)
@@ -833,6 +833,7 @@ export function previewTurnIncome(s: GameState): TurnPreview {
   if (foodAfter < 0) {
     let deficit = Math.ceil(-foodAfter / CONFIG.starveRatio)
     if (deficit > 0) deficit = Math.max(0, deficit - mods.starveFlatReduction)
+    if (mods.flags.sacredGrain && deficit > 0) deficit = Math.ceil(deficit / 2)
     if (deficit > 0) starved = Math.min(deficit, population(s))
   }
 

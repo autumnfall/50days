@@ -89,20 +89,12 @@ export default function Game() {
     settledForRef.current = state
     const result = settleRun(state, loadMeta())
     saveMetaProgress(result.meta)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSettleInfo(result)
     // 胜负已分：删除自动存档，防止反复读取最后一回合刷传承点
     deleteSave(0)
     refreshMeta()
   }, [state, refreshMeta])
-
-  // 自动弹出教程（首次进入 playing 阶段）
-  const prevPhaseRef = useState(state.phase)
-  useEffect(() => {
-    if (state.phase === 'playing' && prevPhaseRef[0] === 'start' && !isTutorialCompleted()) {
-      setTutorialStep(0)
-    }
-    prevPhaseRef[0] = state.phase
-  }, [state.phase])
 
   /** 切换教程步骤，并联动移动端 Tab 确保目标面板已渲染（与步骤状态同批次更新） */
   const gotoTutorialStep = useCallback((n: number | null) => {
@@ -116,6 +108,7 @@ export default function Game() {
   const onStart = useCallback((nation: NationId, talents: string[], mode: GameMode, seed?: number) => {
     lastStartRef.current = { nation, talents, mode, seed }
     setState(chooseNation(createGame(talents, { mode, seed }), nation))
+    if (!isTutorialCompleted()) setTutorialStep(0)
   }, [])
   const onRestart = useCallback(() => { settledForRef.current = null; setSettleInfo(null); setState(createGame()) }, [])
   /** 肉鸽模式：以相同 seed/文明/天赋直接再战一局 */
@@ -249,7 +242,7 @@ export default function Game() {
       </div>
 
       {state.phase === 'battle' && state.battle && (
-        <BattleModal report={state.battle} onClose={onCloseBattle} />
+        <BattleModal report={state.battle} onClose={onCloseBattle} key={`battle-${state.day}`} />
       )}
       {state.phase === 'dungeon_result' && state.dungeon?.pendingResult && (
         <DungeonResultModal result={state.dungeon.pendingResult} onClose={onCloseDungeonResult} />

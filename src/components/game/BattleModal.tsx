@@ -9,10 +9,9 @@ export default function BattleModal({ report, onClose }: { report: BattleReport;
   const total = report.rounds.length
   const done = shown >= total
 
-  // 逐轮播放
+  // 逐轮播放（BattleModal 在 Game.tsx 中按 state.day 加 key 强制重渲染，shown 初始为 0）
   useEffect(() => {
-    if (total === 0) { setShown(0); return }
-    setShown(0)
+    if (total === 0) return
     const t = setInterval(() => {
       setShown((v) => {
         if (v >= total) { clearInterval(t); return v }

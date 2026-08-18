@@ -17,6 +17,7 @@ const phaseLabel: Record<string, string> = {
   start: '选择文明',
   playing: '进行中',
   battle: '战斗中',
+  dungeon_result: '地牢结算中',
   victory: '已胜利',
   defeat: '已战败',
 }
