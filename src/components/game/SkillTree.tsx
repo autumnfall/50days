@@ -67,7 +67,7 @@ export default function SkillTree({
                       {tierInfo.label} · 🏅{skill.cost}
                     </div>
                     <div className="mt-0.5 text-[9px] leading-tight text-stone-500">
-                      {unlocked ? '✓ 已习得' : !check.ok ? `🔒 ${check.reason}` : skill.desc}
+                      {unlocked ? `✓ 已习得 · ${skill.desc}` : `${skill.desc}${!check.ok ? ` · 🔒 ${check.reason}` : ''}`}
                     </div>
                   </button>
                 )

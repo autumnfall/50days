@@ -35,7 +35,7 @@ export default function DungeonPanel({
       <div className="space-y-2">
         {DUNGEON_FLOORS.map((f) => {
           const cleared = f.floor <= highestCleared
-          const available = f.floor <= nextFloor && !dailyAttempted && totalSoldiers > 0
+          const available = f.floor === nextFloor && !dailyAttempted && totalSoldiers > 0
           const locked = f.floor > nextFloor
           const isSelected = selected === f.floor
 
@@ -99,7 +99,7 @@ export default function DungeonPanel({
                         : 'bg-stone-800 text-stone-500 cursor-not-allowed',
                     )}
                   >
-                    {dailyAttempted ? '今日已挑战' : totalSoldiers <= 0 ? '无可用部队' : locked ? '未解锁' : `⚔️ 挑战第${selectedFloor.floor}层`}
+                    {cleared ? '✓ 已通关' : dailyAttempted ? '今日已挑战' : totalSoldiers <= 0 ? '无可用部队' : locked ? '未解锁' : `⚔️ 挑战第${selectedFloor.floor}层`}
                   </button>
                 </div>
               )}

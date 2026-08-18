@@ -22,9 +22,9 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
   const preview = state.phase === 'playing' ? previewTurnIncome(state) : null
 
   return (
-    <header className="sticky top-0 z-20 border-b border-stone-700/60 bg-stone-950/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 sm:gap-x-5 sm:gap-y-2 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-2">
+    <header className="fixed inset-x-0 top-0 z-20 h-14 border-b border-stone-700/60 bg-stone-950/90 backdrop-blur-md lg:sticky lg:h-auto">
+      <div className="mx-auto flex h-full max-w-7xl flex-nowrap items-center gap-x-2 overflow-x-auto px-3 sm:px-4 lg:flex-wrap lg:overflow-visible lg:gap-x-5 lg:gap-y-2 lg:py-3">
+        <div className="flex flex-none items-center gap-2">
           <span className="text-2xl">{state.nation ? NATIONS[state.nation].icon : '🏰'}</span>
           <div className="hidden sm:block">
             <div className="text-base font-black tracking-widest text-amber-200">五十日坚守</div>
@@ -33,7 +33,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         </div>
 
         {/* 天数进度 */}
-        <div className="min-w-32 flex-1 sm:max-w-60">
+        <div className="flex-none w-28 sm:min-w-32 sm:flex-1 sm:max-w-60">
           {isRogue ? (
             <>
               <div className="flex items-center justify-between text-xs text-stone-400">
@@ -65,7 +65,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
 
         {/* 遗物栏（肉鸽模式） */}
         {isRogue && state.run && state.run.relics.length > 0 && (
-          <div className="flex items-center gap-1 rounded-lg border border-purple-800/50 bg-purple-950/30 px-2 py-1" title="本场远征已获得的遗物">
+          <div className="flex flex-none items-center gap-1 rounded-lg border border-purple-800/50 bg-purple-950/30 px-2 py-1" title="本场远征已获得的遗物">
             {state.run.relics.map((id) => {
               const r = getRelic(id)
               return r ? <span key={id} className="text-sm" title={`${r.icon} ${r.name}：${r.desc}`}>{r.icon}</span> : null
@@ -74,7 +74,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         )}
 
         {/* 资源 */}
-        <div className="flex items-center gap-2.5" data-tutorial="resources">
+        <div className="flex flex-none items-center gap-2" data-tutorial="resources">
           {(Object.keys(RESOURCE_INFO) as ResourceId[]).map((r) => {
             const delta = preview ? (r === 'food' ? preview.food : r === 'wood' ? preview.wood : preview.gold) : 0
             const d = preview?.detail
@@ -86,28 +86,28 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
                   : `采集 +${d.goldGather}${d.interest > 0 ? `  利息 +${d.interest}` : ''}`
               : RESOURCE_INFO[r].name
             return (
-              <div key={r} className="relative group flex flex-col items-center rounded-lg bg-stone-800/80 px-2 py-0.5 sm:px-2.5 sm:py-1" title={tooltip}>
+              <div key={r} className="relative group flex h-9 w-14 flex-none flex-col items-center justify-center rounded-lg bg-stone-800/80 px-1 py-0.5 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1" title={tooltip}>
                 <div className="flex items-center gap-1">
-                  <span>{RESOURCE_INFO[r].icon}</span>
-                  <span className={cn('font-bold tabular-nums', RESOURCE_INFO[r].color, r === 'food' && state.resources.food < foodUpkeep(state) && 'animate-pulse text-red-400')}>
+                  <span className="text-xs sm:text-base">{RESOURCE_INFO[r].icon}</span>
+                  <span className={cn('text-xs font-bold tabular-nums sm:text-base', RESOURCE_INFO[r].color, r === 'food' && state.resources.food < foodUpkeep(state) && 'animate-pulse text-red-400')}>
                     {Math.floor(state.resources[r])}
                   </span>
                 </div>
                 {preview && delta !== 0 && (
-                  <span className={cn('text-[10px] tabular-nums font-medium', delta > 0 ? 'text-emerald-400' : 'text-red-400')}>
+                  <span className={cn('text-[9px] tabular-nums font-medium sm:text-[10px]', delta > 0 ? 'text-emerald-400' : 'text-red-400')}>
                     {delta > 0 ? '+' : ''}{delta}
                   </span>
                 )}
               </div>
             )
           })}
-          <div className="flex items-center gap-1 rounded-lg bg-amber-900/50 px-2.5 py-1" title="荣耀点（战斗缴获，用于解锁技能）">
-            <span>🏅</span>
-            <span className="font-bold tabular-nums text-amber-300">{state.honor}</span>
+          <div className="flex h-9 w-14 flex-none items-center justify-center gap-1 rounded-lg bg-amber-900/50 px-1 py-0.5 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1" title="荣耀点（战斗缴获，用于解锁技能）">
+            <span className="text-xs sm:text-base">🏅</span>
+            <span className="text-xs font-bold tabular-nums text-amber-300 sm:text-base">{state.honor}</span>
           </div>
-          <div className="flex items-center gap-1 rounded-lg bg-stone-800/80 px-2.5 py-1" title={`总人口（村民 ${state.villagers} + 士兵 ${soldierCount(state)}）/ 住房上限 ${popCap(state)}`}>
-            <span>👥</span>
-            <span className={cn('font-bold tabular-nums text-stone-200', population(state) >= popCap(state) && 'text-red-400')}>
+          <div className="flex h-9 w-16 flex-none items-center justify-center gap-1 rounded-lg bg-stone-800/80 px-1 py-0.5 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1" title={`总人口（村民 ${state.villagers} + 士兵 ${soldierCount(state)}）/ 住房上限 ${popCap(state)}`}>
+            <span className="text-xs sm:text-base">👥</span>
+            <span className={cn('text-xs font-bold tabular-nums text-stone-200 sm:text-base', population(state) >= popCap(state) && 'text-red-400')}>
               {population(state)}<span className="text-stone-500">/{popCap(state)}</span>
             </span>
           </div>
@@ -116,7 +116,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         {/* 波次预警 */}
         <div data-tutorial="wave-warning"
           className={cn(
-            'flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs sm:gap-2 sm:px-3 sm:py-1.5',
+            'flex flex-none items-center gap-1.5 rounded-lg border px-2 py-1 text-xs sm:gap-2 sm:px-3 sm:py-1.5',
             chance >= 1
               ? 'animate-pulse border-red-500/60 bg-red-950/60 text-red-300'
               : chance >= 0.6 || danger
@@ -142,7 +142,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         {state.phase === 'playing' && onOpenSaveLoad && (
           <button
             onClick={() => onOpenSaveLoad('save')}
-            className="rounded-lg bg-stone-800/80 px-2.5 py-1.5 text-sm text-stone-300 transition hover:bg-stone-700"
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-stone-800/80 text-sm text-stone-300 transition hover:bg-stone-700 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1.5"
             title="保存游戏"
           >
             💾
@@ -151,7 +151,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         {onOpenSaveLoad && (
           <button
             onClick={() => onOpenSaveLoad('load')}
-            className="rounded-lg bg-stone-800/80 px-2.5 py-1.5 text-sm text-stone-300 transition hover:bg-stone-700"
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-stone-800/80 text-sm text-stone-300 transition hover:bg-stone-700 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1.5"
             title="读取存档"
           >
             📂
@@ -160,7 +160,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         {onTutorial && (
           <button
             onClick={onTutorial}
-            className="rounded-lg bg-stone-800/80 px-2.5 py-1.5 text-sm text-stone-300 transition hover:bg-stone-700"
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-stone-800/80 text-sm text-stone-300 transition hover:bg-stone-700 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1.5"
             title="教程"
           >
             📖
@@ -168,7 +168,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
         )}
         <button
           onClick={onHelp}
-          className="rounded-lg bg-stone-800/80 px-2.5 py-1.5 text-sm text-stone-300 transition hover:bg-stone-700"
+          className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-stone-800/80 text-sm text-stone-300 transition hover:bg-stone-700 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1.5"
           title="游戏规则"
         >
           ❓

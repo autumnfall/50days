@@ -80,6 +80,7 @@ export default function Game() {
   const settledForRef = useRef<GameState | null>(null)
   /** 本局开局参数（肉鸽模式「同 seed 再战」用） */
   const lastStartRef = useRef<{ nation: NationId; talents: string[]; mode: GameMode; seed?: number } | null>(null)
+  const refreshMeta = useCallback(() => setSaveMeta(getAllSaveMetadata()), [])
 
   // 局结束结算：传承点 + 生涯记录（每局只结算一次，ref 防 StrictMode 双写）
   useEffect(() => {
@@ -89,7 +90,10 @@ export default function Game() {
     const result = settleRun(state, loadMeta())
     saveMetaProgress(result.meta)
     setSettleInfo(result)
-  }, [state])
+    // 胜负已分：删除自动存档，防止反复读取最后一回合刷传承点
+    deleteSave(0)
+    refreshMeta()
+  }, [state, refreshMeta])
 
   // 自动弹出教程（首次进入 playing 阶段）
   const prevPhaseRef = useState(state.phase)
@@ -99,8 +103,6 @@ export default function Game() {
     }
     prevPhaseRef[0] = state.phase
   }, [state.phase])
-
-  const refreshMeta = useCallback(() => setSaveMeta(getAllSaveMetadata()), [])
 
   /** 切换教程步骤，并联动移动端 Tab 确保目标面板已渲染（与步骤状态同批次更新） */
   const gotoTutorialStep = useCallback((n: number | null) => {
@@ -192,7 +194,7 @@ export default function Game() {
       </main>
 
       {/* ============ 移动端：底部 Tab 导航（lg 以下） ============ */}
-      <main className="mx-auto w-full max-w-xl flex-1 px-3 pb-40 pt-3 lg:hidden">
+      <main className="mx-auto w-full max-w-xl flex-1 px-3 pb-40 pt-16 lg:hidden">
         {mobileTab === 'village' && (
           <div className="flex flex-col gap-3">
             <VillageView state={state} />

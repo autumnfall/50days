@@ -47,7 +47,7 @@ function TalentNode({
           {active ? '✓' : `${def.cost}点`}
         </span>
       </div>
-      <div className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-stone-500">{def.desc}</div>
+      <div className="mt-0.5 text-[10px] leading-snug text-stone-500">{def.desc}</div>
     </button>
   )
 }

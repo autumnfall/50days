@@ -1374,7 +1374,7 @@ export function enterDungeon(s: GameState, floor: number): GameState {
   if (s.phase !== 'playing') return s
   if (!s.dungeon || s.dungeon.dailyAttempted) return s
   if (floor < 1 || floor > 10) return s
-  if (floor > (s.dungeon.highestCleared ?? 0) + 1) return s
+  if (floor !== (s.dungeon.highestCleared ?? 0) + 1) return s
   const totalSoldiers = soldierCount(s)
   if (totalSoldiers <= 0) return s
 
