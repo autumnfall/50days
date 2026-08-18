@@ -3,7 +3,7 @@ import { UNITS, type UnitId } from '@/game/config'
 import type { BattleReport } from '@/game/engine'
 import { cn } from '@/lib/utils'
 
-export default function BattleModal({ report, onClose }: { report: BattleReport; onClose: () => void }) {
+export default function BattleModal({ report, onClose, closeLabel = '继续坚守' }: { report: BattleReport; onClose: () => void; closeLabel?: string }) {
   const { wave } = report
   const [shown, setShown] = useState(0) // 已展示的轮数
   const total = report.rounds.length
@@ -140,7 +140,7 @@ export default function BattleModal({ report, onClose }: { report: BattleReport;
                 : 'cursor-wait bg-stone-800 text-stone-600',
             )}
           >
-            {done ? '继续坚守' : '战斗中…'}
+            {done ? closeLabel : '战斗中…'}
           </button>
         </div>
       </div>

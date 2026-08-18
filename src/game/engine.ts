@@ -760,12 +760,12 @@ export function endTurn(s: GameState): GameState {
     ns = resolveBattle(ns, boss)
     if (ns.phase === 'defeat') return ns
     // 终局决战必须击退 Boss；即使战后复活，失败也算游戏结束
+    // 保留 battle 战报：由 Game 先展示终局战报，关闭后再进入结算页
     if (!ns.battle?.won) {
       return {
         ...ns,
         phase: 'defeat',
         defeatReason: '未能守住第 50 天的终局决战。',
-        battle: null,
         log: pushLog(ns, '☠️ 村庄陷落了……', 'bad'),
       }
     }
@@ -895,12 +895,12 @@ function resolveRogueWave(s: GameState, newDay: number): GameState {
   }
   const afterBattle = resolveBattle(ns, wave, modifier)
   // 无尽远征：黑暗领主 Boss 波必须击退，否则远征直接结束
+  // 保留 battle 战报：由 Game 先展示最后一战的战报，关闭后再进入结算页
   if (isBossDay && afterBattle.phase === 'battle' && !afterBattle.battle?.won) {
     return {
       ...afterBattle,
       phase: 'defeat',
       defeatReason: '未能击退黑暗领主，远征就此终结。',
-      battle: null,
       log: pushLog(afterBattle, '☠️ 黑暗领主踏平了营地……', 'bad'),
     }
   }
@@ -1580,6 +1580,8 @@ export function closeDungeonResult(s: GameState): GameState {
 }
 
 export function closeBattleReport(s: GameState): GameState {
+  // 战败时也可能有未看的最后一战报：关闭后保持 defeat，由 Game 转入结算页
+  if (s.phase === 'defeat') return s.battle ? { ...s, battle: null } : s
   if (s.phase !== 'battle') return s
   if (s.defeatedFinalBoss) {
     return { ...s, phase: 'victory', battle: null, log: pushLog(s, '🎉 黑暗大军被击溃！王国的援军抵达了！你守住了 50 天！', 'good') }

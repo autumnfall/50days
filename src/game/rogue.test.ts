@@ -184,6 +184,12 @@ describe('无尽波次与战场词条', () => {
     expect(ns.day).toBe(CONFIG.rogue.bossInterval)
     expect(ns.phase).toBe('defeat')
     expect(ns.defeatReason).toContain('黑暗领主')
+    // 保留最后一战战报，关闭战报后才停留在结算页
+    expect(ns.battle).not.toBeNull()
+    expect(ns.battle!.won).toBe(false)
+    const after = closeBattleReport(ns)
+    expect(after.phase).toBe('defeat')
+    expect(after.battle).toBeNull()
   })
 })
 
@@ -228,6 +234,9 @@ describe('标准模式终局决战', () => {
     expect(ns.day).toBe(CONFIG.totalDays)
     expect(ns.phase).toBe('defeat')
     expect(ns.defeatReason).toContain('终局')
+    // 同样保留终局战报供玩家查看
+    expect(ns.battle).not.toBeNull()
+    expect(ns.battle!.won).toBe(false)
   })
 
   it('第 50 天终局 Boss 战胜后先展示战报，关闭战报后进入胜利', () => {
