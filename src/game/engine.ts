@@ -677,12 +677,22 @@ export function endTurn(s: GameState): GameState {
   if (ns.mode === 'rogue') {
     ns = resolveRogueWave(ns, newDay)
     if (ns.phase === 'defeat') return ns
-  } else if (newDay >= CONFIG.totalDays) {
+  } else if (newDay >= CONFIG.totalDays && !ns.defeatedFinalBoss) {
     // 终局 Boss：最后一天必定遭遇，固定第 20 波难度
     const boss = finalBossWave()
     ns = { ...ns, omen: false, log: pushLog(ns, `💀 黑暗大军压境！终局决战开始！`, 'battle') }
     ns = resolveBattle(ns, boss)
     if (ns.phase === 'defeat') return ns
+    // 终局决战必须击退 Boss；即使战后复活，失败也算游戏结束
+    if (!ns.battle?.won) {
+      return {
+        ...ns,
+        phase: 'defeat',
+        defeatReason: '未能守住第 50 天的终局决战。',
+        battle: null,
+        log: pushLog(ns, '☠️ 村庄陷落了……', 'bad'),
+      }
+    }
     ns = { ...ns, defeatedFinalBoss: true }
   } else {
     // 随机波次：第 3 天起每天判定，概率 20% 逐日递增
@@ -708,7 +718,7 @@ export function endTurn(s: GameState): GameState {
   }
 
   // 7. 胜利判定（必须击败终局 Boss；无尽远征没有胜利终点）
-  if (ns.mode !== 'rogue' && newDay > CONFIG.totalDays && ns.defeatedFinalBoss) {
+  if (ns.mode !== 'rogue' && newDay >= CONFIG.totalDays && ns.defeatedFinalBoss) {
     return { ...ns, phase: 'victory', log: pushLog(ns, '🎉 黑暗大军被击溃！王国的援军抵达了！你守住了 50 天！', 'good') }
   }
   return ns

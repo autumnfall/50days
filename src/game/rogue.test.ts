@@ -212,6 +212,25 @@ describe('肉鸽结算', () => {
   })
 })
 
+describe('标准模式终局决战', () => {
+  it('第 50 天终局 Boss 战败后，即使战后复活也会直接判负', () => {
+    let s = chooseNation(createGame([], { mode: 'classic', seed: 7 }), 'military')
+    s = {
+      ...s,
+      day: CONFIG.totalDays - 1,
+      skills: new Set(['mi_soulguard']),
+      villagers: 0,
+      soldiers: { militia: 10, archer: 0, knight: 0, warlord: 0 },
+      resources: { food: 99999, wood: 9999, gold: 9999 },
+      buildings: { farm: 0, lumber: 0, mine: 0, house: 0, barracks: 0, wall: 0, tower: 0 },
+    }
+    const ns = endTurn(s)
+    expect(ns.day).toBe(CONFIG.totalDays)
+    expect(ns.phase).toBe('defeat')
+    expect(ns.defeatReason).toContain('终局')
+  })
+})
+
 describe('祝福池配置完整性', () => {
   it('所有遗物都有对应祝福，且祝福 id 唯一', () => {
     const ids = BLESSINGS.map((b) => b.id)
