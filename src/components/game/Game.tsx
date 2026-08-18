@@ -156,7 +156,8 @@ export default function Game() {
   const tutorialSkip = useCallback(() => { markTutorialCompleted(); gotoTutorialStep(null) }, [gotoTutorialStep])
 
   if (state.phase === 'start') return <StartScreen onStart={onStart} onLoad={onLoad} />
-  if (state.phase === 'victory' || state.phase === 'defeat') return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onRetrySeed={onRetrySeed} onLoad={onLoad} />
+  // 战败但还有未看的最后一战战报：先走完正常布局 + 战报弹窗，关闭战报后才进结算页
+  if (state.phase === 'victory' || (state.phase === 'defeat' && !state.battle)) return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onRetrySeed={onRetrySeed} onLoad={onLoad} />
 
   return (
     <div className="flex min-h-dvh flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-stone-950 text-stone-100">
@@ -228,8 +229,8 @@ export default function Game() {
         )}
       </main>
 
-      {/* 移动端固定底栏：常驻结束回合 + Tab 导航 */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-700/60 bg-stone-950/95 px-3 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur-md lg:hidden">
+      {/* 移动端固定底栏：常驻结束回合 + Tab 导航（不用 backdrop-blur：常驻大区域模糊会触发 Chromium 合成层重绘故障，导致内容偶发不显示） */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-700/60 bg-stone-950 px-3 pb-[env(safe-area-inset-bottom)] pt-2 lg:hidden">
         <EndTurnButton state={state} onEndTurn={onEndTurn} className="py-3 text-base" />
         <nav className="mt-2 flex items-stretch justify-between gap-1 pb-1">
           {MOBILE_TABS.map((tab) => {
@@ -257,8 +258,8 @@ export default function Game() {
         </nav>
       </div>
 
-      {state.phase === 'battle' && state.battle && (
-        <BattleModal report={state.battle} onClose={onCloseBattle} key={`battle-${state.day}`} />
+      {(state.phase === 'battle' || state.phase === 'defeat') && state.battle && (
+        <BattleModal report={state.battle} onClose={onCloseBattle} key={`battle-${state.day}`} closeLabel={state.phase === 'defeat' ? '查看结局' : undefined} />
       )}
       {state.phase === 'dungeon_result' && state.dungeon?.pendingResult && (
         <DungeonResultModal result={state.dungeon.pendingResult} onClose={onCloseDungeonResult} />

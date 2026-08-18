@@ -22,7 +22,7 @@ export default function Header({ state, onOpenSaveLoad, onTutorial, onHelp }: {
   const preview = state.phase === 'playing' ? previewTurnIncome(state) : null
 
   return (
-    <header className="fixed inset-x-0 top-0 z-20 h-14 border-b border-stone-700/60 bg-stone-950/90 backdrop-blur-md lg:sticky lg:h-auto">
+    <header className="fixed inset-x-0 top-0 z-20 h-14 border-b border-stone-700/60 bg-stone-950/95 lg:sticky lg:h-auto">
       <div className="mx-auto flex h-full max-w-7xl flex-nowrap items-center gap-x-2 overflow-x-auto px-3 sm:px-4 lg:flex-wrap lg:overflow-visible lg:gap-x-5 lg:gap-y-2 lg:py-3">
         <div className="flex flex-none items-center gap-2">
           <span className="text-2xl">{state.nation ? NATIONS[state.nation].icon : '🏰'}</span>

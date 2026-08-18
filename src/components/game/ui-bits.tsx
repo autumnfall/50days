@@ -30,7 +30,9 @@ export function Panel({ title, icon, children, className, extra, ...rest }: {
   extra?: ReactNode
 } & React.HTMLAttributes<HTMLElement>) {
   return (
-    <section className={cn('rounded-xl border border-stone-700/60 bg-stone-900/70 backdrop-blur-sm shadow-lg', className)} {...rest}>
+    // 不用 backdrop-blur：常驻面板上的背景模糊在 Chromium 下会触发合成层重绘故障，
+    // 切换/滚动时面板内容偶发整块不显示、待下次重绘才恢复；改用更高不透明度背景补偿
+    <section className={cn('rounded-xl border border-stone-700/60 bg-stone-900/90 shadow-lg', className)} {...rest}>
       <header className="flex items-center justify-between gap-2 border-b border-stone-700/60 px-4 py-2.5 flex-nowrap min-w-0">
         <h2 className="flex items-center gap-2 text-sm font-bold tracking-wide text-stone-200 shrink-0">
           <span className="text-base">{icon}</span>
