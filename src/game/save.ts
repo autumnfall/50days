@@ -98,6 +98,21 @@ export function hasAnySave(): boolean {
 
 // ---- 删除 ----
 
+const RECOVER_AUTOSAVE_KEY = 'fiftyDays_recover_autosave'
+
+/** 从恢复会话中读取自动存档（错误边界恢复用） */
+export function consumeRecoverAutoSave(): GameState | null {
+  try {
+    const raw = sessionStorage.getItem(RECOVER_AUTOSAVE_KEY)
+    if (!raw) return null
+    sessionStorage.removeItem(RECOVER_AUTOSAVE_KEY)
+    const parsed = JSON.parse(raw)
+    return { ...parsed, skills: new Set<string>(parsed.skills ?? []) } as GameState
+  } catch {
+    return null
+  }
+}
+
 export function deleteSave(slot: number) {
   const key = slot === 0 ? AUTOSAVE_KEY : SAVE_KEY_PREFIX + slot
   localStorage.removeItem(key)

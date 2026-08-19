@@ -5,7 +5,7 @@ import {
   type GameMode, type GameState,
 } from '@/game/engine'
 import { CONFIG, NATIONS, type BuildingId, type NationId, type ResourceId, type UnitId, type UpgradeId } from '@/game/config'
-import { autoSave, deleteSave, getAllSaveMetadata, loadGame, saveGame, type SaveMetadata } from '@/game/save'
+import { autoSave, consumeRecoverAutoSave, deleteSave, getAllSaveMetadata, loadGame, saveGame, type SaveMetadata } from '@/game/save'
 import { loadMeta, saveMeta as saveMetaProgress, settleRun, type SettleResult } from '@/game/meta'
 import { isTutorialCompleted, markTutorialCompleted, TUTORIAL_STEPS } from '@/game/tutorial'
 import StartScreen from './StartScreen'
@@ -71,7 +71,7 @@ function EndTurnButton({ state, onEndTurn, className }: { state: GameState; onEn
 }
 
 export default function Game() {
-  const [state, setState] = useState<GameState>(createGame)
+  const [state, setState] = useState<GameState>(() => consumeRecoverAutoSave() ?? createGame())
   const [saveLoadOpen, setSaveLoadOpen] = useState(false)
   const [saveLoadMode, setSaveLoadMode] = useState<'save' | 'load'>('save')
   const [saveMeta, setSaveMeta] = useState<(SaveMetadata | null)[]>(() => getAllSaveMetadata())

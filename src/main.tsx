@@ -4,6 +4,14 @@ import { BrowserRouter } from 'react-router'
 import './index.css'
 import App from './App.tsx'
 
+// 全局未捕获错误：同步错误与未处理的 Promise 拒绝都打印到控制台，便于定位白屏根因
+window.addEventListener('error', (e) => {
+  console.error('Global error:', e.error)
+})
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Unhandled rejection:', e.reason)
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
