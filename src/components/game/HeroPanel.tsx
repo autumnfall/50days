@@ -137,7 +137,7 @@ export default function HeroPanel({ state, onUpgrade, onLearnPassive, onLearnAct
               <button
                 onClick={onActivateSkill}
                 disabled={!activeCheck.ok}
-                title={activeCheck.ok ? '激活后下一场战斗触发' : activeCheck.reason}
+                title={activeCheck.ok ? (hero.id === 'huoqubing' ? '激活后今日可额外挑战地牢一次' : '激活后下一场战斗触发') : activeCheck.reason}
                 className={cn(
                   'rounded border px-1.5 py-0.5 text-[10px] font-bold transition active:scale-95',
                   activeCheck.ok

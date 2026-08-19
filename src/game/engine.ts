@@ -356,10 +356,18 @@ export function activateHeroSkill(s: GameState): GameState {
   if (!canActivateHeroSkill(s.hero, s.day).ok) return s
   const def = getHeroDef(s.hero.id)
   if (!def) return s
-  const hero: HeroState = { ...s.hero, pendingSkill: true, skillCooldownUntil: s.day + def.active.cooldownDays }
-  // 霍去病·千里奔袭：激活即获得当日额外一次地牢挑战次数
-  if (hero.id === 'huoqubing') hero.dungeonExtraCharges = 1
-  return { ...s, hero, log: pushLog(s, `🏹「${def.active.name}」已就绪：下一场战斗将伏击敌军！`, 'skill') }
+  // 霍去病·千里奔袭：效果为“当日额外一次地牢”，立即生效，不需要挂起
+  const isRaid = s.hero.id === 'huoqubing'
+  const hero: HeroState = {
+    ...s.hero,
+    pendingSkill: isRaid ? false : true,
+    skillCooldownUntil: s.day + def.active.cooldownDays,
+    dungeonExtraCharges: isRaid ? 1 : s.hero.dungeonExtraCharges,
+  }
+  const note = isRaid
+    ? `🏇「${def.active.name}」已就绪：今日可额外挑战地牢一次！`
+    : `🏹「${def.active.name}」已就绪：下一场战斗将伏击敌军！`
+  return { ...s, hero, log: pushLog(s, note, 'skill') }
 }
 
 // ---------------- 英雄效果计算辅助函数 ----------------
@@ -1806,7 +1814,10 @@ export function enterDungeon(s: GameState, floor: number): GameState {
     if (usingExtraCharge && state.hero) {
       nextDungeon.dailyAttempted = true
     }
-    return { ...state, phase: 'dungeon_result', dungeon: nextDungeon, hero: state.hero ? { ...state.hero, dungeonExtraCharges: Math.max(0, state.hero.dungeonExtraCharges - 1) } : state.hero }
+    const nextHero = state.hero
+      ? { ...state.hero, dungeonExtraCharges: Math.max(0, state.hero.dungeonExtraCharges - (usingExtraCharge ? 1 : 0)) }
+      : state.hero
+    return { ...state, phase: 'dungeon_result', dungeon: nextDungeon, hero: nextHero }
   } catch (e) {
     console.error('地牢战斗错误:', e)
     return { ...s, log: [...s.log, { day: s.day, text: `⚠️ 地牢异常：${e instanceof Error ? e.message : '未知错误'}`, kind: 'bad' as const }] }

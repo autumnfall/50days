@@ -26,22 +26,27 @@ export default function DungeonPanel({
     ? (DUNGEON_FLOORS[selected - 1] ?? endlessFloor)
     : null
 
+  const hasExtraCharge = state.hero?.id === 'huoqubing' && (state.hero.dungeonExtraCharges ?? 0) > 0
+  const canChallengeToday = !dailyAttempted || hasExtraCharge
+
   return (
     <Panel
       title="地牢探险"
       icon="🏚️"
       extra={
         <span className="text-xs text-stone-400">
-          {dailyAttempted
-            ? <span className="text-red-400">今日已挑战</span>
-            : <span className="text-emerald-400">可挑战</span>}
+          {hasExtraCharge
+            ? <span className="text-amber-400">可额外挑战</span>
+            : dailyAttempted
+              ? <span className="text-red-400">今日已挑战</span>
+              : <span className="text-emerald-400">可挑战</span>}
         </span>
       }
     >
       <div className="space-y-2">
         {DUNGEON_FLOORS.map((f) => {
           const cleared = f.floor <= highestCleared
-          const available = f.floor === nextFloor && !dailyAttempted && totalSoldiers > 0
+          const available = f.floor === nextFloor && canChallengeToday && totalSoldiers > 0
           const locked = f.floor > nextFloor
           const isSelected = selected === f.floor
 
@@ -119,7 +124,7 @@ export default function DungeonPanel({
               <DungeonFloorDetail
                 floor={selectedFloor}
                 state={state}
-                available={!dailyAttempted && totalSoldiers > 0}
+                available={canChallengeToday && totalSoldiers > 0}
                 dailyAttempted={dailyAttempted}
                 totalSoldiers={totalSoldiers}
                 onEnter={() => { onEnter(selectedFloor.floor); setSelected(null) }}

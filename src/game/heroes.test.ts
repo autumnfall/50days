@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  activateHeroSkill, chooseNation, createGame, endTurn, enterDungeon, learnHeroActive, learnHeroPassive,
+  activateHeroSkill, chooseNation, closeDungeonResult, createGame, endTurn, enterDungeon, learnHeroActive, learnHeroPassive,
   previewTurnIncome, upgradeHero, closeBattleReport, applyEventChoice, type GameState,
 } from './engine'
 import {
@@ -294,11 +294,37 @@ describe('霍去病 · 冠军侯', () => {
     expect(enterDungeon(s, 1)).toBe(s)
     const activated = activateHeroSkill(s)
     expect(activated.hero!.dungeonExtraCharges).toBe(1)
+    expect(activated.hero!.pendingSkill).toBe(false) // 霍去病不挂起，立即生效
     const first = enterDungeon(activated, 1)
     expect(first.phase).toBe('dungeon_result')
     expect(first.hero!.dungeonExtraCharges).toBe(0)
     // 用掉后再次尝试失败
     expect(enterDungeon(first, 1)).toBe(first)
+  })
+
+  it('千里奔袭：先激活再首次挑战，仍可连续挑战两次', () => {
+    let s = startWithHeroId('huoqubing', 2029)
+    s = {
+      ...s,
+      soldiers: { ...s.soldiers, knight: 300 },
+      hero: { ...s.hero!, level: 6, activeLearned: true, passives: [0, 0, 0] },
+      dungeon: { highestCleared: 0, dailyAttempted: false, pendingResult: null },
+    }
+    const activated = activateHeroSkill(s)
+    // 第一次用正常每日次数
+    const first = enterDungeon(activated, 1)
+    expect(first.phase).toBe('dungeon_result')
+    expect(first.dungeon.dailyAttempted).toBe(true)
+    expect(first.hero!.dungeonExtraCharges).toBe(1)
+    // 关闭战报后第二次用额外次数
+    const afterFirst = closeDungeonResult(first)
+    const second = enterDungeon(afterFirst, 1)
+    expect(second.phase).toBe('dungeon_result')
+    expect(second.dungeon.dailyAttempted).toBe(true)
+    expect(second.hero!.dungeonExtraCharges).toBe(0)
+    // 第三次失败
+    const afterSecond = closeDungeonResult(second)
+    expect(enterDungeon(afterSecond, 1)).toBe(afterSecond)
   })
 })
 
