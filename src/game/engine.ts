@@ -1532,8 +1532,9 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
   if (modIds.includes('berserk')) enemyAtk = Math.round(enemyAtk * 1.25 * 10) / 10
   if (modIds.includes('swarm')) enemyCount = Math.round(enemyCount * 1.4)
 
-  // ---- 英雄主动技·大破匈奴：伏击（所有词条缩放之后最后生效，战败也消耗）----
-  const heroAmbush = !!s.hero?.pendingSkill
+  // ---- 英雄主动技·大破匈奴：伏击（所有词条缩放之后最后生效，战败也消耗）
+  // 只有李牧的挂起才在地牢触发伏击；诸葛亮/列奥尼达的主动技只在敌袭触发
+  const heroAmbush = s.hero?.id === 'limu' && !!s.hero?.pendingSkill
   if (heroAmbush) {
     const def = getHeroDef(s.hero!.id)
     const cut = Math.ceil(enemyCount * (def?.active.ambushRatio ?? 0))

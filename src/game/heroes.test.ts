@@ -225,7 +225,7 @@ describe('被动技能效果', () => {
 })
 
 describe('主动技战斗触发', () => {
-  it('伏击：开战削减 15% 敌军、敌方首轮伤害为 0，触发后即消耗', () => {
+  it('李牧·伏击（地牢）：开战削减 15% 敌军、敌方首轮伤害为 0，触发后即消耗', () => {
     const base = { ...startWithHero(999), soldiers: { militia: 30, archer: 0, knight: 0, warlord: 0 } }
     const normal = enterDungeon(withHero(base, { activeLearned: true, pendingSkill: false }), 1)
     const ambush = enterDungeon(withHero(base, { activeLearned: true, pendingSkill: true }), 1)
@@ -235,6 +235,97 @@ describe('主动技战斗触发', () => {
     expect(ambushCount).toBe(Math.max(1, normalCount - Math.ceil(normalCount * 0.15)))
     expect(ambush.dungeon.pendingResult!.rounds[0].enemyDmg).toBe(0)
     expect(ambush.hero!.pendingSkill).toBe(false) // 已消耗
+  })
+
+  it('李牧·伏击（敌袭）：开战削减 15% 敌军、敌方首轮伤害为 0，触发后即消耗', () => {
+    let s = startWithHero(2040)
+    s = {
+      ...s,
+      day: 10,
+      lastWaveDay: 0,
+      wavesFaced: 0,
+      soldiers: { militia: 30, archer: 0, knight: 0, warlord: 0 },
+      hero: { ...s.hero!, level: 6, activeLearned: true, pendingSkill: true },
+    }
+    const normalState = { ...s, hero: { ...s.hero!, pendingSkill: false } }
+    const normalRaw = endTurn(normalState)
+    expect(normalRaw.phase).toBe('battle')
+
+    const ambushRaw = endTurn(s)
+    expect(ambushRaw.phase).toBe('battle')
+    const normalCount = normalRaw.battle!.wave.count
+    const ambushCount = ambushRaw.battle!.wave.count
+    expect(ambushCount).toBe(Math.max(1, normalCount - Math.ceil(normalCount * 0.15)))
+    expect(ambushRaw.battle!.rounds[0].enemyDmg).toBe(0)
+
+    const ambush = closeBattleReport(ambushRaw)
+    expect(ambush.hero!.pendingSkill).toBe(false)
+  })
+
+  it('诸葛亮·空城计（敌袭）：按筹谋吓退敌军并消耗一半筹谋', () => {
+    let s = startWithHeroId('zhugeliang', 2041)
+    s = {
+      ...s,
+      day: 10,
+      lastWaveDay: 0,
+      wavesFaced: 0,
+      soldiers: { ...s.soldiers, militia: 10 },
+      hero: { ...s.hero!, level: 6, activeLearned: true, pendingSkill: true, growth: 10 },
+    }
+    const normalState = { ...s, hero: { ...s.hero!, pendingSkill: false } }
+    const normalRaw = endTurn(normalState)
+    expect(normalRaw.phase).toBe('battle')
+
+    const emptyCityRaw = endTurn(s)
+    expect(emptyCityRaw.phase).toBe('battle')
+    expect(emptyCityRaw.hero!.growth).toBe(5) // 消耗一半（向上取整）
+    expect(emptyCityRaw.hero!.pendingSkill).toBe(false)
+    expect(emptyCityRaw.battle!.wave.count).toBeLessThanOrEqual(normalRaw.battle!.wave.count)
+  })
+
+  it('诸葛亮·空城计不会在地牢被误消耗', () => {
+    let s = startWithHeroId('zhugeliang', 2042)
+    s = {
+      ...s,
+      soldiers: { ...s.soldiers, knight: 300 },
+      hero: { ...s.hero!, level: 6, activeLearned: true, pendingSkill: true, growth: 10 },
+      dungeon: { highestCleared: 0, dailyAttempted: false, pendingResult: null },
+    }
+    const ns = enterDungeon(s, 1)
+    expect(ns.phase).toBe('dungeon_result')
+    expect(ns.hero!.pendingSkill).toBe(true) // 空城计只应在敌袭触发
+    expect(ns.hero!.growth).toBe(10)
+  })
+
+  it('列奥尼达·温泉关（敌袭）：触发后消耗挂起，城墙已破时首回合有备注', () => {
+    let s = startWithHeroId('leonidas', 2043)
+    s = {
+      ...s,
+      day: 10,
+      lastWaveDay: 0,
+      wavesFaced: 0,
+      soldiers: { militia: 30, archer: 0, knight: 0, warlord: 0 },
+      buildings: { ...s.buildings, wall: 0 }, // 无城墙，视为已破，触发温泉关备注
+      hero: { ...s.hero!, level: 6, activeLearned: true, pendingSkill: true },
+    }
+    const ns = endTurn(s)
+    expect(ns.phase).toBe('battle')
+    expect(ns.hero!.pendingSkill).toBe(false)
+    // 城墙已破且触发温泉关时，首回合战报会有备注
+    expect(ns.battle!.rounds.some((r) => r.note?.includes('温泉关'))).toBe(true)
+  })
+
+  it('列奥尼达·温泉关不会在地牢被误消耗', () => {
+    let s = startWithHeroId('leonidas', 2044)
+    s = {
+      ...s,
+      soldiers: { ...s.soldiers, knight: 300 },
+      hero: { ...s.hero!, level: 6, activeLearned: true, pendingSkill: true },
+      dungeon: { highestCleared: 0, dailyAttempted: false, pendingResult: null },
+    }
+    const ns = enterDungeon(s, 1)
+    expect(ns.phase).toBe('dungeon_result')
+    expect(ns.hero!.pendingSkill).toBe(true) // 温泉关只应在敌袭触发
   })
 })
 
@@ -339,35 +430,6 @@ describe('诸葛亮 · 卧龙', () => {
     expect(heroGrowth(s.hero!, s)).toBe(10)
     s = advanceDay(s)
     expect(heroGrowth(s.hero!, s)).toBe(10)
-  })
-
-  it('空城计：敌袭时按筹谋吓退敌军并消耗一半筹谋', () => {
-    let s = startWithHeroId('zhugeliang', 2031)
-    s = {
-      ...s,
-      day: 10,
-      lastWaveDay: 0,
-      wavesFaced: 0,
-      soldiers: { ...s.soldiers, knight: 0, militia: 10 },
-      hero: { ...s.hero!, level: 6, activeLearned: true, pendingSkill: true, growth: 10 },
-    }
-    const normalState = { ...s, hero: { ...s.hero!, pendingSkill: false } }
-    let normal = endTurn(normalState)
-    if (normal.phase === 'battle') normal = closeBattleReport(normal)
-    if (normal.pendingEvent) {
-      const choice = normal.pendingEvent.event.choices.find((c) => !c.reqResources && !c.reqSoldiers) ?? normal.pendingEvent.event.choices[0]
-      normal = applyEventChoice(normal, choice.id)
-    }
-
-    let emptyCity = endTurn(s)
-    if (emptyCity.phase === 'battle') emptyCity = closeBattleReport(emptyCity)
-    if (emptyCity.pendingEvent) {
-      const choice = emptyCity.pendingEvent.event.choices.find((c) => !c.reqResources && !c.reqSoldiers) ?? emptyCity.pendingEvent.event.choices[0]
-      emptyCity = applyEventChoice(emptyCity, choice.id)
-    }
-
-    expect(emptyCity.hero!.growth).toBe(5) // 消耗一半（向上取整）
-    expect(emptyCity.hero!.pendingSkill).toBe(false)
   })
 
   it('草船借箭：敌袭来袭时按敌军数量获得木材', () => {
