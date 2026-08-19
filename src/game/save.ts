@@ -39,6 +39,7 @@ function deserialize(json: string): GameState | null {
     if (parsed.run && typeof parsed.run.blessingsReceived !== 'number') parsed.run.blessingsReceived = 0
     // 兼容旧档：英雄系统
     if (parsed.hero === undefined) parsed.hero = null
+    if (parsed.hero && typeof parsed.hero.dungeonExtraCharges !== 'number') parsed.hero.dungeonExtraCharges = 0
     return { ...parsed, skills: new Set<string>(parsed.skills ?? []) }
   } catch {
     return null

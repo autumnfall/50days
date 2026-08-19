@@ -9,12 +9,16 @@ import {
 } from './engine'
 import {
   ACTIVE_UNLOCK_LEVEL, HERO_MAX_LEVEL, HERO_XP_THRESHOLDS, applyBattleToHero, canActivateHeroSkill,
-  canLearnActive, canLearnPassive, canUpgradeHero, createHeroState, heroSkillPoints, heroUpgradeCost,
+  canLearnActive, canLearnPassive, canUpgradeHero, createHeroState, heroGrowth, heroSkillPoints, heroUpgradeCost,
   type HeroState,
 } from './heroes'
 
 function startWithHero(seed = 12345): GameState {
   return chooseNation(createGame([], { mode: 'classic', seed, hero: 'limu' }), 'military')
+}
+
+function startWithHeroId(id: string, seed = 12345): GameState {
+  return chooseNation(createGame([], { mode: 'classic', seed, hero: id }), 'military')
 }
 
 /** 直接改写英雄状态（测试构造用） */
@@ -231,5 +235,160 @@ describe('主动技战斗触发', () => {
     expect(ambushCount).toBe(Math.max(1, normalCount - Math.ceil(normalCount * 0.15)))
     expect(ambush.dungeon.pendingResult!.rounds[0].enemyDmg).toBe(0)
     expect(ambush.hero!.pendingSkill).toBe(false) // 已消耗
+  })
+})
+
+describe('无尽地牢', () => {
+  it('通关 10 层后可进入第 11 层，荣誉固定 3', () => {
+    let s = startWithHero(2026)
+    s = {
+      ...s,
+      soldiers: { ...s.soldiers, knight: 300 },
+      dungeon: { highestCleared: 10, dailyAttempted: false, pendingResult: null },
+    }
+    const ns = enterDungeon(s, 11)
+    expect(ns.phase).toBe('dungeon_result')
+    expect(ns.dungeon.pendingResult!.floor).toBe(11)
+    expect(ns.dungeon.pendingResult!.honorGained).toBe(3)
+    expect(ns.dungeon.highestCleared).toBe(11)
+  })
+
+  it('未通关 10 层不能进入无尽', () => {
+    let s = startWithHero(2026)
+    s = { ...s, dungeon: { highestCleared: 9, dailyAttempted: false, pendingResult: null } }
+    expect(enterDungeon(s, 11)).toBe(s)
+  })
+})
+
+describe('霍去病 · 冠军侯', () => {
+  it('征尘 = min(地牢最高通关层数, 10)', () => {
+    let s = startWithHeroId('huoqubing', 1)
+    expect(heroGrowth(s.hero!, s)).toBe(0)
+    s = { ...s, dungeon: { ...s.dungeon, highestCleared: 7 } }
+    expect(heroGrowth(s.hero!, s)).toBe(7)
+    s = { ...s, dungeon: { ...s.dungeon, highestCleared: 15 } }
+    expect(heroGrowth(s.hero!, s)).toBe(10)
+  })
+
+  it('封狼居胥：通关地牢额外获得 1/2/3 荣誉', () => {
+    let s = startWithHeroId('huoqubing', 2027)
+    s = {
+      ...s,
+      soldiers: { ...s.soldiers, knight: 300 },
+      dungeon: { highestCleared: 0, dailyAttempted: false, pendingResult: null },
+    }
+    const base = enterDungeon(s, 1)
+    const withPassive = enterDungeon(withHero(s, { passives: [3, 0, 0] }), 1)
+    expect(withPassive.dungeon.pendingResult!.honorGained).toBe(base.dungeon.pendingResult!.honorGained + 3)
+  })
+
+  it('千里奔袭：激活后获得额外地牢次数，突破每日限制', () => {
+    let s = startWithHeroId('huoqubing', 2028)
+    s = {
+      ...s,
+      soldiers: { ...s.soldiers, knight: 300 },
+      hero: { ...s.hero!, level: 6, activeLearned: true, passives: [0, 0, 0] },
+      dungeon: { highestCleared: 0, dailyAttempted: true, pendingResult: null },
+    }
+    // 没有额外次数时无法进入
+    expect(enterDungeon(s, 1)).toBe(s)
+    const activated = activateHeroSkill(s)
+    expect(activated.hero!.dungeonExtraCharges).toBe(1)
+    const first = enterDungeon(activated, 1)
+    expect(first.phase).toBe('dungeon_result')
+    expect(first.hero!.dungeonExtraCharges).toBe(0)
+    // 用掉后再次尝试失败
+    expect(enterDungeon(first, 1)).toBe(first)
+  })
+})
+
+describe('诸葛亮 · 卧龙', () => {
+  it('筹谋每天 +1 并封顶 10', () => {
+    let s = startWithHeroId('zhugeliang', 2030)
+    expect(heroGrowth(s.hero!, s)).toBe(0)
+    s = advanceDay(s)
+    expect(heroGrowth(s.hero!, s)).toBe(1)
+    s = withHero(s, { growth: 9 })
+    s = advanceDay(s)
+    expect(heroGrowth(s.hero!, s)).toBe(10)
+    s = advanceDay(s)
+    expect(heroGrowth(s.hero!, s)).toBe(10)
+  })
+
+  it('空城计：敌袭时按筹谋吓退敌军并消耗一半筹谋', () => {
+    let s = startWithHeroId('zhugeliang', 2031)
+    s = {
+      ...s,
+      day: 10,
+      lastWaveDay: 0,
+      wavesFaced: 0,
+      soldiers: { ...s.soldiers, knight: 0, militia: 10 },
+      hero: { ...s.hero!, level: 6, activeLearned: true, pendingSkill: true, growth: 10 },
+    }
+    const normalState = { ...s, hero: { ...s.hero!, pendingSkill: false } }
+    let normal = endTurn(normalState)
+    if (normal.phase === 'battle') normal = closeBattleReport(normal)
+    if (normal.pendingEvent) {
+      const choice = normal.pendingEvent.event.choices.find((c) => !c.reqResources && !c.reqSoldiers) ?? normal.pendingEvent.event.choices[0]
+      normal = applyEventChoice(normal, choice.id)
+    }
+
+    let emptyCity = endTurn(s)
+    if (emptyCity.phase === 'battle') emptyCity = closeBattleReport(emptyCity)
+    if (emptyCity.pendingEvent) {
+      const choice = emptyCity.pendingEvent.event.choices.find((c) => !c.reqResources && !c.reqSoldiers) ?? emptyCity.pendingEvent.event.choices[0]
+      emptyCity = applyEventChoice(emptyCity, choice.id)
+    }
+
+    expect(emptyCity.hero!.growth).toBe(5) // 消耗一半（向上取整）
+    expect(emptyCity.hero!.pendingSkill).toBe(false)
+  })
+
+  it('草船借箭：敌袭来袭时按敌军数量获得木材', () => {
+    let s = startWithHeroId('zhugeliang', 2032)
+    s = { ...s, day: 10, lastWaveDay: 2, wavesFaced: 0, hero: { ...s.hero!, passives: [0, 0, 3] } }
+    // 通过结束回合触发敌袭
+    let ns = endTurn(s)
+    if (ns.phase === 'battle') ns = closeBattleReport(ns)
+    if (ns.pendingEvent) {
+      const choice = ns.pendingEvent.event.choices.find((c) => !c.reqResources && !c.reqSoldiers) ?? ns.pendingEvent.event.choices[0]
+      ns = applyEventChoice(ns, choice.id)
+    }
+    const gained = ns.resources.wood - s.resources.wood
+    expect(gained).toBeGreaterThan(0)
+    expect(ns.log.some((l) => l.text.includes('草船借箭'))).toBe(true)
+  })
+})
+
+describe('列奥尼达 · 斯巴达之王', () => {
+  it('士兵阵亡增加战意，且战意无上限', () => {
+    let s = startWithHeroId('leonidas', 2033)
+    s = {
+      ...s,
+      soldiers: { ...s.soldiers, militia: 10 },
+      dungeon: { highestCleared: 4, dailyAttempted: false, pendingResult: null },
+    }
+    // 让士兵战败阵亡
+    const ns = enterDungeon(s, 5)
+    expect(ns.hero!.growth).toBeGreaterThan(0)
+  })
+
+  it('盾墙：战意提升士兵生命', () => {
+    const base = { ...startWithHeroId('leonidas', 2034), soldiers: { militia: 30, archer: 0, knight: 0, warlord: 0 } }
+    const a = enterDungeon(withHero(base, { passives: [0, 0, 0], growth: 0 }), 1)
+    const b = enterDungeon(withHero(base, { passives: [1, 0, 0], growth: 20 }), 1)
+    expect(b.dungeon.pendingResult!.rounds[0].enemyDmg).toBeLessThanOrEqual(a.dungeon.pendingResult!.rounds[0].enemyDmg)
+  })
+
+  it('殊死一搏：阵亡士兵对敌军造成亡语伤害', () => {
+    let s = startWithHeroId('leonidas', 2035)
+    s = {
+      ...s,
+      soldiers: { ...s.soldiers, militia: 10 },
+      hero: { ...s.hero!, passives: [0, 3, 0] },
+      dungeon: { highestCleared: 4, dailyAttempted: false, pendingResult: null },
+    }
+    const ns = enterDungeon(s, 5)
+    expect(ns.dungeon.pendingResult!.rounds.some((r) => r.note?.includes('殊死一搏'))).toBe(true)
   })
 })

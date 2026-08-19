@@ -4,6 +4,8 @@
 // 提供独立于科技/天赋/遗物的新成长维度：一个成长状态 + 3 被动 + 1 主动。
 // ============================================================
 
+import type { GameState } from './engine'
+
 /** 英雄等级上限 */
 export const HERO_MAX_LEVEL = 10
 /** 每级所需经验（索引 0 = 1→2 级）。累计 63 点，约第 45 天可满级 */
@@ -28,8 +30,14 @@ export interface HeroActiveDef {
   desc: string
   /** 冷却天数（从激活当天算起） */
   cooldownDays: number
-  /** 伏击：开战时削减敌军数量的比例 */
-  ambushRatio: number
+  /** 伏击：开战时削减敌军数量的比例（李牧） */
+  ambushRatio?: number
+  /** 空城计：每点筹谋吓退敌军的比例（诸葛亮） */
+  scareRatio?: number
+  /** 温泉关：城墙吸收量翻倍倍数（列奥尼达） */
+  wallAbsorbMult?: number
+  /** 温泉关：城墙被摧毁后士兵伤害加成（列奥尼达） */
+  breachDmgMult?: number
 }
 
 export interface HeroDef {
@@ -52,7 +60,7 @@ export interface HeroState {
   level: number
   /** 当前等级内已积累的经验 */
   xp: number
-  /** 成长状态（李牧：战功） */
+  /** 成长状态（李牧：战功；诸葛亮：筹谋；列奥尼达：战意） */
   growth: number
   /** 三个被动技能各自的等级（0 = 未学习） */
   passives: [number, number, number]
@@ -61,6 +69,8 @@ export interface HeroState {
   pendingSkill: boolean
   /** 主动技冷却截止天数（day >= 此值时可再次激活） */
   skillCooldownUntil: number
+  /** 霍去病·千里奔袭：当日额外可进入地牢的次数 */
+  dungeonExtraCharges: number
 }
 
 export const HEROES: HeroDef[] = [
@@ -101,6 +111,116 @@ export const HEROES: HeroDef[] = [
       ambushRatio: 0.15,
     },
   },
+  {
+    id: 'huoqubing',
+    name: '霍去病',
+    title: '冠军侯 · 封狼居胥',
+    icon: '🏇',
+    desc: '十七岁深入大漠，六天转战五国，以战养战、封狼居胥。地牢越深，他的威名越盛。',
+    growthName: '征尘',
+    growthDesc: '地牢最高通关层数（封顶 10）',
+    growthCap: 10,
+    passives: [
+      {
+        id: 'honor_loot',
+        name: '封狼居胥',
+        values: [1, 2, 3],
+        desc: (v) => `通关任意地牢层，额外荣誉 +${v}`,
+      },
+      {
+        id: 'farm_from_dungeon',
+        name: '军功授田',
+        values: [0.01, 0.02, 0.03],
+        desc: (v) => `征尘每有 1 层，全体村民采集效率 +${Math.round(v * 100)}%（封顶 10 层）`,
+      },
+      {
+        id: 'normal_atk_from_floors',
+        name: '威震漠北',
+        values: [0.01, 0.02, 0.03],
+        desc: (v) => `敌袭战斗中士兵攻击 +征尘×${Math.round(v * 100)}%（封顶 10 层）`,
+      },
+    ],
+    active: {
+      id: 'raid',
+      name: '千里奔袭',
+      desc: '激活后当天可额外进入地牢一次（突破每日 1 次限制），第二次地牢敌军数量 -10%。',
+      cooldownDays: 6,
+    },
+  },
+  {
+    id: 'zhugeliang',
+    name: '诸葛亮',
+    title: '卧龙 · 鞠躬尽瘁',
+    icon: '🪶',
+    desc: '隆中对定三分、草船借箭、空城退敌。每过一天，他的筹谋便深一分。',
+    growthName: '筹谋',
+    growthDesc: '每过一天 +1（上限 10）',
+    growthCap: 10,
+    passives: [
+      {
+        id: 'eight_trigrams',
+        name: '八阵图',
+        values: [0.005, 0.01, 0.015],
+        desc: (v) => `敌军伤害 -筹谋×${Math.round(v * 1000) / 10}%（上限 -${Math.round(v * 1000) / 10 * 10}%）`,
+      },
+      {
+        id: 'supply',
+        name: '木牛流马',
+        values: [0.1, 0.2, 0.3],
+        desc: (v) => `士兵食物消耗 -${Math.round(v * 100)}%`,
+      },
+      {
+        id: 'borrow_arrows',
+        name: '草船借箭',
+        values: [1, 2, 3],
+        desc: (v) => `敌袭来袭时，按敌军数量获得 ${v} 木材/只`,
+      },
+    ],
+    active: {
+      id: 'empty_city',
+      name: '空城计',
+      desc: '激活后挂起：下一次敌袭开战时，按筹谋×3% 吓退敌军（上限 30%），消耗一半筹谋（向上取整）。',
+      cooldownDays: 7,
+      scareRatio: 0.03,
+    },
+  },
+  {
+    id: 'leonidas',
+    name: '列奥尼达',
+    title: '斯巴达之王 · 温泉关',
+    icon: '🛡️',
+    desc: '率三百勇士死守温泉关，全员战死不后退。士兵的牺牲会化为战意，激励生者。',
+    growthName: '战意',
+    growthDesc: '士兵阵亡 +1（无上限）',
+    passives: [
+      {
+        id: 'shield_wall',
+        name: '盾墙',
+        values: [0.002, 0.004, 0.006],
+        desc: (v) => `全体士兵生命 +战意×${Math.round(v * 1000) / 10}%`,
+      },
+      {
+        id: 'last_stand',
+        name: '殊死一搏',
+        values: [0.5, 1, 1.5],
+        desc: (v) => `士兵阵亡时对随机敌人造成其攻击力 ${Math.round(v * 100)}% 的伤害`,
+      },
+      {
+        id: 'legacy_farm',
+        name: '遗志励耕',
+        values: [0.002, 0.004, 0.006],
+        desc: (v) => `村民采集效率 +战意×${Math.round(v * 1000) / 10}%`,
+      },
+    ],
+    active: {
+      id: 'thermopylae',
+      name: '温泉关',
+      desc: '激活后挂起：下一场战斗城墙吸收量翻倍；若城墙被摧毁，本场后续回合士兵伤害 +50%。',
+      cooldownDays: 7,
+      wallAbsorbMult: 2,
+      breachDmgMult: 0.5,
+    },
+  },
 ]
 
 export function getHeroDef(id: string): HeroDef | undefined {
@@ -108,7 +228,15 @@ export function getHeroDef(id: string): HeroDef | undefined {
 }
 
 export function createHeroState(id: string): HeroState {
-  return { id, level: 1, xp: 0, growth: 0, passives: [0, 0, 0], activeLearned: false, pendingSkill: false, skillCooldownUntil: 0 }
+  return { id, level: 1, xp: 0, growth: 0, passives: [0, 0, 0], activeLearned: false, pendingSkill: false, skillCooldownUntil: 0, dungeonExtraCharges: 0 }
+}
+
+/** 英雄当前成长状态（对李牧/诸葛亮/列奥尼达读存储值；霍去病按地牢最高层计算并封顶） */
+export function heroGrowth(hero: HeroState, state: GameState): number {
+  const def = getHeroDef(hero.id)
+  const cap = def?.growthCap ?? Infinity
+  if (hero.id === 'huoqubing') return Math.min(cap, state.dungeon.highestCleared)
+  return Math.min(cap, hero.growth)
 }
 
 /** 升到下一级所需经验（满级返回 Infinity） */

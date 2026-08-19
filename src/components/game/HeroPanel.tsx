@@ -1,7 +1,7 @@
 import { type GameState } from '@/game/engine'
 import {
   ACTIVE_UNLOCK_LEVEL, HERO_MAX_LEVEL, canActivateHeroSkill, canLearnActive, canLearnPassive, canUpgradeHero,
-  getHeroDef, heroSkillPoints, heroUpgradeCost, heroXpNeeded,
+  getHeroDef, heroGrowth, heroSkillPoints, heroUpgradeCost, heroXpNeeded,
 } from '@/game/heroes'
 import { Panel } from './ui-bits'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,7 @@ export default function HeroPanel({ state, onUpgrade, onLearnPassive, onLearnAct
   const points = heroSkillPoints(hero)
   const maxed = hero.level >= HERO_MAX_LEVEL
   const xpNeed = heroXpNeeded(hero.level)
+  const growth = heroGrowth(hero, state)
   const upgradeCheck = canUpgradeHero(hero, state.honor)
   const activeCheck = canActivateHeroSkill(hero, state.day)
   const learnActiveCheck = canLearnActive(hero)
@@ -38,7 +39,7 @@ export default function HeroPanel({ state, onUpgrade, onLearnPassive, onLearnAct
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-sky-200">Lv {hero.level}<span className="text-stone-500"> / {HERO_MAX_LEVEL}</span></span>
             <span className="text-stone-400">
-              {def.growthName} <b className="text-amber-300">{hero.growth}{def.growthCap ? ` / ${def.growthCap}` : ''}</b>
+              {def.growthName} <b className="text-amber-300">{growth}{def.growthCap ? ` / ${def.growthCap}` : ''}</b>
               <span className="ml-1 text-[10px] text-stone-500">（{def.growthDesc}）</span>
             </span>
           </div>
@@ -128,6 +129,8 @@ export default function HeroPanel({ state, onUpgrade, onLearnPassive, onLearnAct
               >
                 学习（Lv{ACTIVE_UNLOCK_LEVEL} 解锁）
               </button>
+            ) : hero.id === 'huoqubing' && hero.dungeonExtraCharges > 0 ? (
+              <span className="rounded border border-amber-500/60 bg-amber-900/30 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">今日可额外挑战</span>
             ) : hero.pendingSkill ? (
               <span className="rounded border border-amber-500/60 bg-amber-900/30 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">已挂起</span>
             ) : (
@@ -148,7 +151,9 @@ export default function HeroPanel({ state, onUpgrade, onLearnPassive, onLearnAct
           </div>
           <p className="mt-1 text-[11px] leading-snug text-stone-400">{def.active.desc}（冷却 {def.active.cooldownDays} 天）</p>
           {hero.pendingSkill && (
-            <p className="mt-1 text-[10px] text-amber-400/80">将在下一场敌袭或地牢战斗中触发</p>
+            <p className="mt-1 text-[10px] text-amber-400/80">
+              {hero.id === 'limu' ? '将在下一场敌袭或地牢战斗中触发' : '将在下一场敌袭战斗中触发'}
+            </p>
           )}
         </div>
       </div>
