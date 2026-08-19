@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { loadGame } from '@/game/save'
+import { reportError } from '@/lib/report-error'
 
 interface Props {
   children: ReactNode
@@ -24,6 +25,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught error:', error, errorInfo)
+    reportError('react', error, { componentStack: errorInfo.componentStack ?? undefined })
     this.setState({ errorInfo })
   }
 
@@ -59,7 +61,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         <div className="w-full max-w-md rounded-2xl border border-red-700/40 bg-stone-900/90 p-6 shadow-2xl">
           <div className="text-center text-4xl">⚠️</div>
           <h1 className="mt-3 text-center text-xl font-black tracking-widest text-red-300">游戏遇到了错误</h1>
-          <p className="mt-2 text-center text-xs text-stone-400">错误信息已记录到控制台，可截图发给开发者排查</p>
+          <p className="mt-2 text-center text-xs text-stone-400">错误信息已上报服务器（如配置），也可截图发给开发者排查</p>
 
           <div className="mt-4 max-h-40 overflow-auto rounded-lg border border-stone-700/60 bg-stone-950 p-3 text-[11px] leading-relaxed text-red-200/80">
             <p className="font-mono">{error?.name}: {error?.message}</p>
