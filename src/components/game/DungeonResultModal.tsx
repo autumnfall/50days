@@ -118,6 +118,33 @@ export default function DungeonResultModal({
             </div>
           )}
 
+          {/* 战力明细 */}
+          {result.unitDetails.length > 0 && (
+            <div>
+              <div className="text-xs font-bold text-stone-500 mb-1.5">战力明细（基础 → 最终）</div>
+              <div className="space-y-1 rounded-lg bg-stone-800/40 p-2">
+                {result.unitDetails.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between text-xs">
+                    <span className="text-stone-300">{u.icon} {u.name} ×{u.count}</span>
+                    <span className="text-stone-400">
+                      <span className="text-emerald-300">攻 {u.baseAtk}→{u.finalAtk}</span>
+                      <span className="mx-1.5 text-stone-600">|</span>
+                      <span className="text-sky-300">血 {u.baseHp}→{u.finalHp}</span>
+                    </span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between border-t border-stone-700/30 pt-1 text-xs">
+                  <span className="text-stone-300">{result.enemyDetails.icon} {result.enemyDetails.name} ×{result.enemyDetails.count}</span>
+                  <span className="text-stone-400">
+                    <span className="text-red-300">攻 {result.enemyDetails.baseAtk}→{result.enemyDetails.finalAtk}</span>
+                    <span className="mx-1.5 text-stone-600">|</span>
+                    <span className="text-orange-300">血 {result.enemyDetails.baseHp}→{result.enemyDetails.finalHp}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 战斗概要 */}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg bg-stone-800/50 p-2">

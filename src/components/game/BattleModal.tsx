@@ -74,6 +74,37 @@ export default function BattleModal({ report, onClose, closeLabel = '继续坚�
           )}
         </div>
 
+        {/* 战力明细 */}
+        {report.unitDetails.length > 0 && (
+          <div className="border-t border-stone-700/40 px-6 py-3">
+            <h3 className="mb-2 text-[11px] font-bold tracking-wider text-stone-500">战力明细（基础 → 最终）</h3>
+            <div className="space-y-1.5">
+              {report.unitDetails.map((u) => (
+                <div key={u.id} className="flex items-center justify-between text-xs">
+                  <span className="text-stone-300">
+                    {u.icon} {u.name} ×{u.count}
+                  </span>
+                  <span className="text-stone-400">
+                    <span className="text-emerald-300">攻 {u.baseAtk}→{u.finalAtk}</span>
+                    <span className="mx-1.5 text-stone-600">|</span>
+                    <span className="text-sky-300">血 {u.baseHp}→{u.finalHp}</span>
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-stone-700/30 pt-1.5 text-xs">
+                <span className="text-stone-300">
+                  {report.enemyDetails.icon} {report.enemyDetails.name} ×{report.enemyDetails.count}
+                </span>
+                <span className="text-stone-400">
+                  <span className="text-red-300">攻 {report.enemyDetails.baseAtk}→{report.enemyDetails.finalAtk}</span>
+                  <span className="mx-1.5 text-stone-600">|</span>
+                  <span className="text-orange-300">血 {report.enemyDetails.baseHp}→{report.enemyDetails.finalHp}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 战斗过程 */}
         <div className="h-52 space-y-1.5 overflow-y-auto px-6 py-4">
           {total === 0 && <p className="text-sm text-stone-400">村庄毫无防备，敌人长驱直入……</p>}

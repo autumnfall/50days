@@ -51,6 +51,27 @@ export interface BattleRound {
   playerLostByType?: Partial<Record<UnitId, number>>
 }
 
+export interface UnitDetail {
+  id: UnitId
+  name: string
+  icon: string
+  count: number
+  baseAtk: number
+  baseHp: number
+  finalAtk: number
+  finalHp: number
+}
+
+export interface EnemyDetail {
+  name: string
+  icon: string
+  count: number
+  baseHp: number
+  baseAtk: number
+  finalHp: number
+  finalAtk: number
+}
+
 export interface BattleReport {
   wave: WaveInfo
   rounds: BattleRound[]
@@ -65,6 +86,10 @@ export interface BattleReport {
   buildingLost: string | null
   lootGold: number
   honorGained: number
+  /** 参战各兵种的基础与最终属性，便于玩家查看科技/天赋/英雄加成 */
+  unitDetails: UnitDetail[]
+  /** 敌军基础与最终属性 */
+  enemyDetails: EnemyDetail
   /** 肉鸽模式：本波附带的战场词条 */
   modifier?: DungeonModifier | null
 }
@@ -486,6 +511,50 @@ export function unitAtk(s: GameState, id: UnitId): number {
 export function unitHp(s: GameState, id: UnitId): number {
   if (id === 'warlord') return BASE_UNIT_IDS.reduce((sum, u) => sum + baseUnitHp(s, u), 0)
   return baseUnitHp(s, id)
+}
+
+/** 构造参战单位明细（基础属性 vs 最终进场属性） */
+function buildUnitDetails(
+  s: GameState,
+  atkMult: number,
+  hpMult: number,
+): UnitDetail[] {
+  const details: UnitDetail[] = []
+  for (const id of ['militia', 'archer', 'knight', 'warlord'] as UnitId[]) {
+    const count = s.soldiers[id]
+    if (count <= 0) continue
+    const def = UNITS[id]
+    const baseAtk = unitAtk(s, id)
+    const baseHp = unitHp(s, id)
+    details.push({
+      id,
+      name: def.name,
+      icon: def.icon,
+      count,
+      baseAtk,
+      baseHp,
+      finalAtk: Math.round(baseAtk * atkMult),
+      finalHp: Math.round(baseHp * hpMult),
+    })
+  }
+  return details
+}
+
+function buildEnemyDetail(
+  wave: WaveInfo,
+  enemyCount: number,
+  enemyHp: number,
+  enemyAtk: number,
+): EnemyDetail {
+  return {
+    name: wave.name,
+    icon: wave.icon,
+    count: enemyCount,
+    baseHp: wave.hpEach,
+    baseAtk: wave.atkEach,
+    finalHp: enemyHp,
+    finalAtk: enemyAtk,
+  }
 }
 
 export function towerDmg(s: GameState): number {
@@ -1220,10 +1289,12 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
   // 英雄被动：士兵攻击/生命加成
   const heroAtkMult = heroSoldierAtkMult(ns, false)
   const heroHpMult = heroSoldierHpMult(ns)
+  const finalAtkMult = playerAtkMult * heroAtkMult
+  const finalHpMult = playerHpMult * heroHpMult
   const units: { id: UnitId; hp: number; atk: number }[] = []
   ;(['warlord', 'knight', 'archer', 'militia'] as UnitId[]).forEach((id) => {
     for (let i = 0; i < ns.soldiers[id]; i++) {
-      units.push({ id, hp: Math.round(unitHp(ns, id) * playerHpMult * heroHpMult), atk: Math.round(unitAtk(ns, id) * playerAtkMult * heroAtkMult) })
+      units.push({ id, hp: Math.round(unitHp(ns, id) * finalHpMult), atk: Math.round(unitAtk(ns, id) * finalAtkMult) })
     }
   })
   // 英雄被动·以少胜多（李牧）：敌军数量超过我方士兵时，我方伤害 +N%
@@ -1255,6 +1326,8 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
     buildingLost: null,
     lootGold: 0,
     honorGained: 0,
+    unitDetails: buildUnitDetails(ns, finalAtkMult, finalHpMult),
+    enemyDetails: buildEnemyDetail(wave, enemyCount, enemyHp, enemyAtk),
     modifier,
   }
 
@@ -1505,6 +1578,8 @@ export interface DungeonResult {
   soldiersLost: Partial<Record<UnitId, number>>
   soldiersRevived: Partial<Record<UnitId, number>>
   honorGained: number
+  unitDetails: UnitDetail[]
+  enemyDetails: EnemyDetail
 }
 
 /** 无尽地牢每层固定荣誉 */
@@ -1588,6 +1663,8 @@ function resolveDungeonBattle(s: GameState, floor: number): { state: GameState; 
     soldiersLost: {},
     soldiersRevived: {},
     honorGained: 0,
+    unitDetails: buildUnitDetails(s, atkMult * heroAtkMult, hpMult * heroHpMult),
+    enemyDetails: buildEnemyDetail(wave, enemyCount, enemyHp, enemyAtk),
   }
 
   let kills = 0
