@@ -38,7 +38,7 @@ export default function HeroPanel({ state, onUpgrade, onLearnPassive, onLearnAct
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-sky-200">Lv {hero.level}<span className="text-stone-500"> / {HERO_MAX_LEVEL}</span></span>
             <span className="text-stone-400">
-              {def.growthName} <b className="text-amber-300">{hero.growth}</b>
+              {def.growthName} <b className="text-amber-300">{hero.growth}{def.growthCap ? ` / ${def.growthCap}` : ''}</b>
               <span className="ml-1 text-[10px] text-stone-500">（{def.growthDesc}）</span>
             </span>
           </div>

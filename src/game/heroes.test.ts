@@ -166,6 +166,15 @@ describe('战功（成长状态）', () => {
     expect(applyBattleToHero(h, false).growth).toBe(0) // 下限 0
   })
 
+  it('战功上限 30，达到后胜利不再增长', () => {
+    const h = createHeroState('limu')
+    const capped = applyBattleToHero({ ...h, growth: 30 }, true)
+    expect(capped.growth).toBe(30)
+    expect(capped.xp).toBe(1) // 经验照常 +1
+    const belowCap = applyBattleToHero({ ...h, growth: 29 }, true)
+    expect(belowCap.growth).toBe(30)
+  })
+
   it('地牢战斗胜利 → 战功 +1、经验 +1', () => {
     let s = startWithHero(777)
     s = { ...s, soldiers: { ...s.soldiers, knight: 200 } } // 碾压兵力确保通关

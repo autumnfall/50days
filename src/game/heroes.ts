@@ -41,6 +41,8 @@ export interface HeroDef {
   /** 成长状态名（如「战功」） */
   growthName: string
   growthDesc: string
+  /** 成长状态上限（未设置则无上限） */
+  growthCap?: number
   passives: HeroPassiveDef[]
   active: HeroActiveDef
 }
@@ -70,6 +72,7 @@ export const HEROES: HeroDef[] = [
     desc: '常年镇守雁门，示弱诱敌、一战破匈奴十万骑。胜仗越多，部队越有他的风范。',
     growthName: '战功',
     growthDesc: '战斗胜利 +1，失败 -2（最低为 0）',
+    growthCap: 30,
     passives: [
       {
         id: 'veteran',
@@ -166,6 +169,8 @@ export function passiveValue(hero: HeroState, index: number): number {
 
 /** 战斗结算：胜 → 战功+1、经验+1；败 → 战功-2（下限 0）。返回新状态 */
 export function applyBattleToHero(hero: HeroState, won: boolean): HeroState {
-  if (won) return { ...hero, growth: hero.growth + 1, xp: hero.xp + 1 }
+  const def = getHeroDef(hero.id)
+  const cap = def?.growthCap ?? Infinity
+  if (won) return { ...hero, growth: Math.min(cap, hero.growth + 1), xp: hero.xp + 1 }
   return { ...hero, growth: Math.max(0, hero.growth - 2) }
 }
