@@ -80,8 +80,8 @@ export const HEROES: HeroDef[] = [
       {
         id: 'tuntian',
         name: '屯田戍边',
-        values: [1, 2, 3],
-        desc: (v) => `每座民居每日额外产出 +${v} 食物`,
+        values: [0.01, 0.02, 0.03],
+        desc: (v) => `每座民居每日 +${Math.round(v * 100)} 食物，且食物采集效率 +${Math.round(v * 100)}%`,
       },
       {
         id: 'outnumbered',

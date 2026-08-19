@@ -187,12 +187,18 @@ describe('被动技能效果', () => {
     expect(dmgB).toBeGreaterThan(dmgA)
   })
 
-  it('屯田戍边：每座民居每日 +N 食物（平量，体现在收入预览中）', () => {
+  it('屯田戍边：每座民居 +N 食物且提升食物采集效率（体现在收入预览中）', () => {
     let s = startWithHero()
     s = { ...s, buildings: { ...s.buildings, house: 2 } }
+    // 默认 3 名村民采食，百分比加成太小会向下取整到 0，所以增加采食人口让百分比可见
+    s = { ...s, villagers: 50, assignment: { ...s.assignment, food: 50, wood: 0, gold: 0 } }
     const without = previewTurnIncome(withHero(s, { passives: [0, 0, 0] }))
     const withLv2 = previewTurnIncome(withHero(s, { passives: [0, 2, 0] }))
-    expect(withLv2.detail.foodGather - without.detail.foodGather).toBe(2 * 2)
+    // Lv2 + 2 民居 = +4% 食物采集，另有 +4 固定食物
+    expect(withLv2.detail.foodGather).toBeGreaterThan(without.detail.foodGather + 4)
+    expect(withLv2.detail.foodGather - without.detail.foodGather).toBe(
+      Math.floor(without.detail.foodGather * 0.04) + 4,
+    )
   })
 
   it('以少胜多：敌军数量超过我方士兵时我方伤害提升', () => {

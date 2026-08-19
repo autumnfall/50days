@@ -653,17 +653,20 @@ export function endTurn(s: GameState): GameState {
   for (const mult of mods.gatherMults.food) income.food = Math.floor(income.food * mult)
   for (const mult of mods.gatherMults.wood) income.wood = Math.floor(income.wood * mult)
   for (const mult of mods.gatherMults.gold) income.gold = Math.floor(income.gold * mult)
+  // 英雄被动·屯田戍边：每座民居提升食物采集效率 +N%，并额外 +N 食物（N=技能等级）
+  if (ns.hero && ns.buildings.house > 0) {
+    const perHouse = passiveValue(ns.hero, 1)
+    if (perHouse > 0) {
+      income.food = Math.floor(income.food * (1 + ns.buildings.house * perHouse))
+      income.food += ns.buildings.house * Math.round(perHouse * 100)
+    }
+  }
   // 义勇：每名民兵各资源 +N（固定值，不吃任何百分比加成）
   if (mods.militiaIncome > 0 && ns.soldiers.militia > 0) {
     const militiaBonus = ns.soldiers.militia * mods.militiaIncome
     income.food += militiaBonus
     income.wood += militiaBonus
     income.gold += militiaBonus
-  }
-  // 英雄被动·屯田戍边：每座民居每日 +N 食物（固定值，不吃任何百分比加成）
-  if (ns.hero && ns.buildings.house > 0) {
-    const perHouse = passiveValue(ns.hero, 1)
-    if (perHouse > 0) income.food += ns.buildings.house * perHouse
   }
 
   ns.resources.food += income.food
@@ -933,17 +936,20 @@ export function previewTurnIncome(s: GameState): TurnPreview {
   for (const mult of mods.gatherMults.food) foodGather = Math.floor(foodGather * mult)
   for (const mult of mods.gatherMults.wood) woodGather = Math.floor(woodGather * mult)
   for (const mult of mods.gatherMults.gold) goldGather = Math.floor(goldGather * mult)
+  // 英雄被动·屯田戍边：每座民居提升食物采集效率 +N%，并额外 +N 食物
+  if (s.hero && s.buildings.house > 0) {
+    const perHouse = passiveValue(s.hero, 1)
+    if (perHouse > 0) {
+      foodGather = Math.floor(foodGather * (1 + s.buildings.house * perHouse))
+      foodGather += s.buildings.house * Math.round(perHouse * 100)
+    }
+  }
   // 义勇（固定值，不吃百分比加成）
   if (mods.militiaIncome > 0 && s.soldiers.militia > 0) {
     const militiaBonus = s.soldiers.militia * mods.militiaIncome
     foodGather += militiaBonus
     woodGather += militiaBonus
     goldGather += militiaBonus
-  }
-  // 英雄被动·屯田戍边（固定值，不吃百分比加成）
-  if (s.hero && s.buildings.house > 0) {
-    const perHouse = passiveValue(s.hero, 1)
-    if (perHouse > 0) foodGather += s.buildings.house * perHouse
   }
 
   const goldAfterGather = s.resources.gold + goldGather
