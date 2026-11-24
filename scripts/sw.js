@@ -27,12 +27,13 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).catch(async () => {
       const cache = await caches.open(cacheName)
-      return await cache.match(startPage) ?? Response.error()
+      return await cache.match(startPage, { ignoreVary: true }) ?? Response.error()
     }))
   } else if (assetSet.has(request.url)) {
     event.respondWith((async () => {
       const cache = await caches.open(cacheName)
-      return await cache.match(request) ?? fetch(request)
+      // 预缓存请求和模块加载的 Origin 请求头可能不同。资源清单只包含构建生成的静态文件。
+      return await cache.match(request.url, { ignoreVary: true }) ?? fetch(request)
     })())
   }
 })
