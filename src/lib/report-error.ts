@@ -46,20 +46,21 @@ export function reportError(
 
   const payload: ErrorReportPayload = {
     type,
-    url: typeof window !== 'undefined' ? window.location.href : '',
+    url: typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '',
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
     timestamp: new Date().toISOString(),
     ...extra,
+    componentStack: extra?.componentStack?.slice(0, 1000),
   }
 
   if (error instanceof Error) {
-    payload.name = error.name
-    payload.message = error.message
-    payload.stack = error.stack
+    payload.name = error.name.slice(0, 100)
+    payload.message = error.message.slice(0, 400)
+    payload.stack = error.stack?.slice(0, 1800)
   } else if (typeof error === 'string') {
-    payload.message = error
+    payload.message = error.slice(0, 400)
   } else if (error && typeof error === 'object' && 'message' in error) {
-    payload.message = String((error as Record<string, unknown>).message)
+    payload.message = String((error as Record<string, unknown>).message).slice(0, 400)
   }
 
   try {

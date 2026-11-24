@@ -14,19 +14,9 @@ export async function disableTutorial(page: Page) {
   await page.addInitScript(() => localStorage.setItem('fiftyDays_tutorialCompleted', 'true'))
 }
 
-/**
- * 获取当前可见的结束回合按钮。
- * 桌面端和移动端各有一个 EndTurnButton（都带 data-tutorial="end-turn"），
- * 桌面端的那个在移动端视口下被 .hidden 父容器隐藏，需要用不同选择器定位。
- */
+/** 获取当前布局的结束回合按钮。 */
 export function getEndTurnButton(page: Page): Locator {
-  // 移动端的 EndTurnButton 在 .fixed 固定底栏内（lg:hidden 容器）
-  // 桌面端的 EndTurnButton 在主内容区（无 .fixed 祖先）
-  const isMobile = (page.viewportSize()?.width ?? 1280) < 1024
-  if (isMobile) {
-    return page.locator('.fixed [data-tutorial="end-turn"]').first()
-  }
-  return page.locator('[data-tutorial="end-turn"]').first()
+  return page.locator('[data-tutorial="end-turn"]')
 }
 
 // ---- Start Screen ----
@@ -75,12 +65,11 @@ export async function endTurn(page: Page) {
 
 export async function dismissAllModals(page: Page) {
   for (let attempt = 0; attempt < 15; attempt++) {
-    // Check for battle overlay by its unique code-path attribute
-    const battleOverlay = page.locator('div[code-path*="BattleModal"]').first()
+    const battleOverlay = page.getByTestId('battle-report')
     const hasBattle = await battleOverlay.isVisible({ timeout: 500 }).catch(() => false)
 
     if (hasBattle) {
-      const btn = page.getByRole('button', { name: '继续坚守' })
+      const btn = battleOverlay.getByRole('button', { name: /继续坚守|查看结局/ })
       const enabled = await btn.isEnabled({ timeout: 2000 }).catch(() => false)
       if (enabled) {
         await btn.click()
@@ -110,7 +99,8 @@ export async function dismissAllModals(page: Page) {
 }
 
 export async function dismissBattle(page: Page) {
-  const btn = page.getByRole('button', { name: '继续坚守' })
+  const battleOverlay = page.getByTestId('battle-report')
+  const btn = battleOverlay.getByRole('button', { name: /继续坚守|查看结局/ })
   await btn.waitFor({ state: 'visible', timeout: 60_000 })
   await btn.click()
 }
@@ -135,7 +125,7 @@ export async function endTurnAndResolve(page: Page): Promise<boolean> {
   await page.waitForTimeout(1000)
 
   // Wait for battle animation to finish (button becomes enabled after all rounds shown)
-  const battleBtn = page.getByRole('button', { name: '继续坚守' })
+  const battleBtn = battleOverlay.getByRole('button', { name: /继续坚守|查看结局/ })
   const hasBattle = await battleBtn.isVisible({ timeout: 8000 }).catch(() => false)
   if (hasBattle) {
     await expect(battleBtn).toBeEnabled({ timeout: 60_000 })

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TUTORIAL_STEPS, type TutorialStep } from '@/game/tutorial'
 import { cn } from '@/lib/utils'
 
@@ -29,16 +29,15 @@ export default function TutorialOverlay({
   const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({})
   const tooltipRef = useRef<HTMLDivElement>(null)
   const lastTouchY = useRef<number | null>(null)
-  const retryRef = useRef<number>(0)
 
-  const findTarget = (): Element | null => {
+  const findTarget = useCallback((): Element | null => {
     if (!current.target) return null
     const els = document.querySelectorAll(current.target)
     return [...els].find((e) => e.getClientRects().length > 0) ?? null
-  }
+  }, [current.target])
 
   /** 仅测量目标位置（用于 resize / scroll，不再触发滚动） */
-  const measureTarget = () => {
+  const measureTarget = useCallback(() => {
     const el = findTarget()
     if (!el) {
       setTargetPos(null)
@@ -46,42 +45,29 @@ export default function TutorialOverlay({
     }
     const r = el.getBoundingClientRect()
     setTargetPos({ top: r.top, left: r.left, width: r.width, height: r.height })
-  }
+  }, [findTarget])
 
-  /** 步骤切换时：滚动到目标并测量（instant 避免 smooth 滚动期间坐标失效） */
-  const scrollAndMeasure = () => {
-    const el = findTarget()
-    if (!el) {
-      // 目标可能还未渲染（如 Tab 切换动画），最多重试几次
-      if (retryRef.current < 5) {
-        retryRef.current += 1
-        window.requestAnimationFrame(scrollAndMeasure)
-      } else {
-        setTargetPos(null)
-      }
-      return
-    }
-    retryRef.current = 0
-    const { width: vw } = getViewport()
-    const isMobile = vw < 1024
-    // 移动端面板通常较高，优先把目标顶部露出来，便于用户向下滚动查看完整内容
-    el.scrollIntoView({ block: isMobile ? 'start' : 'center', behavior: 'instant' })
-    // 移动端有固定 Header（h-14 = 56px），需要额外往下滚动一点，避免目标被 Header 遮住
-    if (isMobile) {
-      window.scrollBy({ top: -64, behavior: 'auto' })
-    }
-    const r = el.getBoundingClientRect()
-    setTargetPos({ top: r.top, left: r.left, width: r.width, height: r.height })
-  }
-
-  // 切换步骤时先清空旧位置，避免一闪而过的旧 tooltip
   useLayoutEffect(() => {
-    retryRef.current = 0
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTargetPos(null)
     setTooltipStyle({})
-    scrollAndMeasure()
-  }, [step, current.target])
+    if (!current.target) return
+
+    let frame = 0
+    let attempts = 0
+    const scrollAndMeasure = () => {
+      const el = findTarget()
+      if (!el) {
+        if (++attempts <= 5) frame = requestAnimationFrame(scrollAndMeasure)
+        return
+      }
+      const mobile = getViewport().width < 1024
+      el.scrollIntoView({ block: mobile ? 'start' : 'center', behavior: 'instant' })
+      if (mobile) window.scrollBy({ top: -64, behavior: 'auto' })
+      measureTarget()
+    }
+    frame = requestAnimationFrame(scrollAndMeasure)
+    return () => cancelAnimationFrame(frame)
+  }, [step, current.target, findTarget, measureTarget])
 
   useEffect(() => {
     const vv = window.visualViewport
@@ -96,11 +82,10 @@ export default function TutorialOverlay({
       vv?.removeEventListener('resize', onResize)
       vv?.removeEventListener('scroll', onResize)
     }
-  }, [step])
+  }, [measureTarget])
 
   // 根据目标位置和提示卡实际尺寸，计算安全的绝对定位（确保不溢出视口）
   useLayoutEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!targetPos) { setTooltipStyle({}); return }
     const tooltip = tooltipRef.current
     const { width: vw, height: vh } = getViewport()

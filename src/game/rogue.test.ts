@@ -30,7 +30,7 @@ function startRogue(seed: number): GameState {
 
 /** 便于对比的可序列化快照 */
 function snapshot(s: GameState): string {
-  return JSON.stringify({ ...s, skills: [...s.skills], log: s.log.map((l) => `${l.day}:${l.text}`) })
+  return JSON.stringify({ ...s, gameId: undefined, skills: [...s.skills], log: s.log.map((l) => `${l.day}:${l.text}`) })
 }
 
 describe('种子化 PRNG', () => {

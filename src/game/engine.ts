@@ -11,142 +11,15 @@ import { DUNGEON_FLOORS, DUNGEON_MODIFIERS, rollModifiers, type DungeonModifier 
 import { nextRandom, randomSeed } from './rng'
 import { collectMods } from './effects'
 import {
-  applyBattleToHero, canActivateHeroSkill, canLearnActive, canLearnPassive, canUpgradeHero,
-  createHeroState, getHeroDef, heroGrowth, heroUpgradeCost, heroXpNeeded, passiveValue,
-  type HeroState,
+  applyBattleToHero, createHeroState, getHeroDef, passiveValue,
 } from './heroes'
 
-export type Phase = 'start' | 'playing' | 'battle' | 'dungeon_result' | 'victory' | 'defeat'
+import type { BattleReport, DungeonResult, EnemyDetail, GameMode, GameState, Income, UnitDetail } from './state'
+import { pushLog } from './log'
+import { currentHeroGrowth, heroEnemyDmgMult, heroFoodUpkeepMult, heroGatherMult, heroSoldierAtkMult, heroSoldierHpMult } from './hero-actions'
 
-export type GameMode = 'classic' | 'rogue'
-
-/** 肉鸽模式「无尽远征」的 run 状态 */
-export interface RogueRun {
-  /** 初始种子（展示/同 seed 重开用） */
-  seed: number
-  /** 已获得的遗物 id（局内持久被动） */
-  relics: string[]
-  /** 已收到的祝福次数（用于每 3 次一次遗物轮） */
-  blessingsReceived: number
-}
-
-export interface LogEntry {
-  day: number
-  text: string
-  kind: 'info' | 'good' | 'bad' | 'battle' | 'event' | 'skill'
-}
-
-export interface BattleRound {
-  round: number
-  playerDmg: number
-  enemyDmg: number
-  enemiesLeft: number
-  playerLeft: number // 我方剩余战斗单位数（士兵）
-  note?: string
-  /** 各兵种本回合造成的伤害（地牢用） */
-  playerDmgByType?: Partial<Record<UnitId, number>>
-  /** 各兵种本回合击杀数（地牢用） */
-  playerKillsByType?: Partial<Record<UnitId, number>>
-  /** 各兵种本回合阵亡数（地牢用，英魂庇护前） */
-  playerLostByType?: Partial<Record<UnitId, number>>
-}
-
-export interface UnitDetail {
-  id: UnitId
-  name: string
-  icon: string
-  count: number
-  baseAtk: number
-  baseHp: number
-  finalAtk: number
-  finalHp: number
-}
-
-export interface EnemyDetail {
-  name: string
-  icon: string
-  count: number
-  baseHp: number
-  baseAtk: number
-  finalHp: number
-  finalAtk: number
-}
-
-export interface BattleReport {
-  wave: WaveInfo
-  rounds: BattleRound[]
-  won: boolean
-  breached: boolean
-  soldiersLost: Partial<Record<UnitId, number>>
-  soldiersRevived: Partial<Record<UnitId, number>> // 英魂庇护复活
-  villagersLost: number
-  wallLost: number
-  wallRepaired: number // 大地壁垒修复
-  towersLost: number
-  buildingLost: string | null
-  lootGold: number
-  honorGained: number
-  /** 参战各兵种的基础与最终属性，便于玩家查看科技/天赋/英雄加成 */
-  unitDetails: UnitDetail[]
-  /** 敌军基础与最终属性 */
-  enemyDetails: EnemyDetail
-  /** 肉鸽模式：本波附带的战场词条 */
-  modifier?: DungeonModifier | null
-}
-
-export interface Income {
-  food: number
-  wood: number
-  gold: number
-  upkeep: number
-  starved: number
-}
-
-export interface GameState {
-  phase: Phase
-  mode: GameMode
-  /** 种子化 PRNG 当前状态（所有局内随机的唯一随机源，可序列化） */
-  rng: number
-  /** 肉鸽模式 run 状态（经典模式为 null） */
-  run: RogueRun | null
-  nation: NationId | null
-  day: number
-  resources: Record<ResourceId, number>
-  villagers: number
-  assignment: Record<ResourceId, number>
-  soldiers: Record<UnitId, number>
-  buildings: Record<BuildingId, number>
-  skills: Set<string>
-  honor: number
-  /** 终局：无限升级等级 */
-  upgrades: Record<UpgradeId, number>
-  /** 终局：各资源已兑换荣耀次数 */
-  honorExchange: Record<ResourceId, number>
-  log: LogEntry[]
-  battle: BattleReport | null
-  lastIncome: Income | null
-  defeatReason: string | null
-  /** 待玩家抉择的随机事件（缩放后的副本） */
-  pendingEvent: { event: GameEvent } | null
-  /** 不祥之兆：下一波敌人增强 */
-  omen: boolean
-  /** 已击退的波数（下一波 = wavesFaced + 1） */
-  wavesFaced: number
-  /** 上一波来袭的天数（初始 2，使第 3 天来袭概率为 20%） */
-  lastWaveDay: number
-  /** 是否已击败终局 Boss */
-  defeatedFinalBoss: boolean
-  /** 局外天赋：本局激活的天赋 id（开局注入，局内不可更改） */
-  talents: string[]
-  /** 本局英雄（未招募为 null） */
-  hero: HeroState | null
-  /** 地牢探险状态 */
-  dungeon: {
-    highestCleared: number
-    dailyAttempted: boolean
-    pendingResult: DungeonResult | null
-  }
-}
+export { activateHeroSkill, learnHeroActive, learnHeroPassive, upgradeHero } from './hero-actions'
+export type * from './state'
 
 // ---------------- 初始化 ----------------
 
@@ -176,6 +49,7 @@ export function createGame(talentIds: string[] = [], opts: CreateGameOptions = {
     log.push({ day: 1, text: `${heroDef.icon} 英雄 ${heroDef.name}（${heroDef.title}）加入了你的队伍！`, kind: 'skill' })
   }
   return {
+    gameId: globalThis.crypto?.randomUUID?.() ?? `${randomSeed().toString(36)}-${randomSeed().toString(36)}-${randomSeed().toString(36)}`,
     phase: 'start',
     mode,
     rng: seed,
@@ -328,134 +202,6 @@ export function exchangeForHonor(s: GameState, res: ResourceId): GameState {
   }
   const names: Record<ResourceId, string> = { food: '食物', wood: '木材', gold: '金币' }
   return { ...ns, log: pushLog(ns, `🏅 以 ${cost} ${names[res]}献祭，换取 1 荣耀`, 'skill') }
-}
-
-// ---------------- 英雄 ----------------
-
-/** 英雄升级：经验达标后花费荣耀（n→n+1 需 n×2），每级获得 1 技能点 */
-export function upgradeHero(s: GameState): GameState {
-  if (s.phase !== 'playing' || !s.hero) return s
-  if (!canUpgradeHero(s.hero, s.honor).ok) return s
-  const cost = heroUpgradeCost(s.hero.level)
-  const hero: HeroState = { ...s.hero, level: s.hero.level + 1, xp: s.hero.xp - heroXpNeeded(s.hero.level) }
-  const name = getHeroDef(hero.id)?.name ?? '英雄'
-  return {
-    ...s,
-    honor: s.honor - cost,
-    hero,
-    log: pushLog(s, `🛡️ ${name} 升至 ${hero.level} 级！获得 1 技能点`, 'skill'),
-  }
-}
-
-/** 学习/强化被动技能（index 0~2），消耗 1 技能点 */
-export function learnHeroPassive(s: GameState, index: number): GameState {
-  if (s.phase !== 'playing' || !s.hero) return s
-  if (index < 0 || index > 2) return s
-  if (!canLearnPassive(s.hero, index).ok) return s
-  const passives = [...s.hero.passives] as [number, number, number]
-  passives[index] += 1
-  const def = getHeroDef(s.hero.id)
-  const p = def?.passives[index]
-  return {
-    ...s,
-    hero: { ...s.hero, passives },
-    log: pushLog(s, `🛡️ ${def?.name} 习得「${p?.name}」Lv${passives[index]}：${p ? p.desc(p.values[passives[index] - 1]) : ''}`, 'skill'),
-  }
-}
-
-/** 学习主动技能，消耗 1 技能点 */
-export function learnHeroActive(s: GameState): GameState {
-  if (s.phase !== 'playing' || !s.hero) return s
-  if (!canLearnActive(s.hero).ok) return s
-  const def = getHeroDef(s.hero.id)
-  return {
-    ...s,
-    hero: { ...s.hero, activeLearned: true },
-    log: pushLog(s, `🛡️ ${def?.name} 习得主动技「${def?.active.name}」！`, 'skill'),
-  }
-}
-
-/** 激活主动技：挂起至下一场战斗触发（不可叠加），并进入冷却 */
-export function activateHeroSkill(s: GameState): GameState {
-  if (s.phase !== 'playing' || !s.hero) return s
-  if (!canActivateHeroSkill(s.hero, s.day).ok) return s
-  const def = getHeroDef(s.hero.id)
-  if (!def) return s
-  // 霍去病·千里奔袭：效果为“当日额外一次地牢”，立即生效，不需要挂起
-  const isRaid = s.hero.id === 'huoqubing'
-  const hero: HeroState = {
-    ...s.hero,
-    pendingSkill: isRaid ? false : true,
-    skillCooldownUntil: s.day + def.active.cooldownDays,
-    dungeonExtraCharges: isRaid ? 1 : s.hero.dungeonExtraCharges,
-  }
-  const note = isRaid
-    ? `🏇「${def.active.name}」已就绪：今日可额外挑战地牢一次！`
-    : `🏹「${def.active.name}」已就绪：下一场战斗将伏击敌军！`
-  return { ...s, hero, log: pushLog(s, note, 'skill') }
-}
-
-// ---------------- 英雄效果计算辅助函数 ----------------
-
-/** 当前英雄成长状态（霍去病按地牢层数实时计算） */
-function currentHeroGrowth(s: GameState): number {
-  return s.hero ? heroGrowth(s.hero, s) : 0
-}
-
-/** 采集的英雄加成倍率（霍去病·军功授田、列奥尼达·遗志励耕） */
-function heroGatherMult(s: GameState): number {
-  if (!s.hero) return 1
-  const g = currentHeroGrowth(s)
-  let mult = 1
-  // 霍去病·军功授田：征尘每 1 层 +N%（封顶 10）
-  const huoFarm = passiveValue(s.hero, 1)
-  if (huoFarm > 0) mult += g * huoFarm
-  // 列奥尼达·遗志励耕：战意每点 +N%
-  const leoFarm = passiveValue(s.hero, 2)
-  if (leoFarm > 0) mult += g * leoFarm
-  return mult
-}
-
-/** 士兵攻击的英雄倍率（李牧·久经沙场、霍去病·威震漠北） */
-function heroSoldierAtkMult(s: GameState, isDungeon: boolean): number {
-  if (!s.hero) return 1
-  const g = currentHeroGrowth(s)
-  let mult = 1
-  // 李牧·久经沙场
-  const limuAtk = passiveValue(s.hero, 0)
-  if (limuAtk > 0) mult += g * limuAtk
-  // 霍去病·威震漠北：仅普通敌袭
-  if (!isDungeon) {
-    const huoAtk = passiveValue(s.hero, 2)
-    if (huoAtk > 0) mult += g * huoAtk
-  }
-  return mult
-}
-
-/** 士兵生命的英雄倍率（列奥尼达·盾墙） */
-function heroSoldierHpMult(s: GameState): number {
-  if (!s.hero) return 1
-  const g = currentHeroGrowth(s)
-  const leoHp = passiveValue(s.hero, 0)
-  if (leoHp > 0) return 1 + g * leoHp
-  return 1
-}
-
-/** 敌方伤害的英雄倍率（诸葛亮·八阵图） */
-function heroEnemyDmgMult(s: GameState): number {
-  if (!s.hero) return 1
-  const g = currentHeroGrowth(s)
-  const zhugeDef = passiveValue(s.hero, 0)
-  if (zhugeDef > 0) return Math.max(0, 1 - g * zhugeDef)
-  return 1
-}
-
-/** 食物消耗的英雄倍率（诸葛亮·木牛流马） */
-function heroFoodUpkeepMult(s: GameState): number {
-  if (!s.hero) return 1
-  const zhugeSupply = passiveValue(s.hero, 1)
-  if (zhugeSupply > 0) return Math.max(0, 1 - zhugeSupply)
-  return 1
 }
 
 // ---------------- 派生数据 ----------------
@@ -684,9 +430,7 @@ export function recruitCost(s: GameState): Partial<Record<ResourceId, number>> {
 
 // ---------------- 行动 ----------------
 
-function pushLog(s: GameState, text: string, kind: LogEntry['kind']): LogEntry[] {
-  return [...s.log, { day: s.day, text, kind }].slice(-100)
-}
+
 
 export function assign(s: GameState, res: ResourceId, delta: number): GameState {
   if (s.phase !== 'playing') return s
@@ -775,6 +519,32 @@ export function recruitMax(s: GameState): GameState {
   return { ...ns, log: pushLog(ns, `🧑‍🌾 大批流民前来投奔（+${n} 村民，-${cost * n} 食物）`, 'good') }
 }
 
+/** 资源预览和回合结算共用采集规则，按效果生效顺序逐步取整。 */
+function gatherResources(s: GameState): Record<ResourceId, number> {
+  const { foodPer, woodPer, goldPer } = gatherPerPerson(s)
+  const mods = collectMods(s)
+  const income = { food: s.assignment.food * foodPer, wood: s.assignment.wood * woodPer, gold: s.assignment.gold * goldPer }
+  const gatherMult = heroGatherMult(s)
+  for (const resource of ['food', 'wood', 'gold'] as const) {
+    for (const mult of mods.gatherMults[resource]) income[resource] = Math.floor(income[resource] * mult)
+    income[resource] = Math.floor(income[resource] * gatherMult)
+  }
+
+  const perHouse = s.hero ? passiveValue(s.hero, 1) : 0
+  if (s.buildings.house > 0 && perHouse > 0) {
+    income.food = Math.floor(income.food * (1 + s.buildings.house * perHouse))
+    income.food += s.buildings.house * Math.round(perHouse * 100)
+  }
+
+  const militiaBonus = s.soldiers.militia * mods.militiaIncome
+  if (militiaBonus > 0) {
+    income.food += militiaBonus
+    income.wood += militiaBonus
+    income.gold += militiaBonus
+  }
+  return income
+}
+
 // ---------------- 回合结算 ----------------
 
 export function endTurn(s: GameState): GameState {
@@ -782,43 +552,7 @@ export function endTurn(s: GameState): GameState {
   let ns: GameState = { ...s, resources: { ...s.resources }, log: [...s.log], dungeon: { ...s.dungeon, dailyAttempted: false, pendingResult: null } }
   const mods = collectMods(ns)
 
-  // 1. 资源采集（含文明/技能/天赋/遗物加成）
-  const { foodPer, woodPer, goldPer } = gatherPerPerson(ns)
-
-  const income: Income = {
-    food: ns.assignment.food * foodPer,
-    wood: ns.assignment.wood * woodPer,
-    gold: ns.assignment.gold * goldPer,
-    upkeep: 0,
-    starved: 0,
-  }
-  // 采集乘算链（生生不息 ×1.25、丰收图腾 ×1.15、商路关税 ×1.2 等，保序逐步取整）
-  for (const mult of mods.gatherMults.food) income.food = Math.floor(income.food * mult)
-  for (const mult of mods.gatherMults.wood) income.wood = Math.floor(income.wood * mult)
-  for (const mult of mods.gatherMults.gold) income.gold = Math.floor(income.gold * mult)
-
-  // 英雄被动·采集加成（霍去病·军功授田 / 列奥尼达·遗志励耕）
-  const gatherMult = heroGatherMult(ns)
-  income.food = Math.floor(income.food * gatherMult)
-  income.wood = Math.floor(income.wood * gatherMult)
-  income.gold = Math.floor(income.gold * gatherMult)
-
-  // 英雄被动·屯田戍边（李牧）：每座民居提升食物采集效率 +N%，并额外 +N 食物
-  if (ns.hero && ns.buildings.house > 0) {
-    const perHouse = passiveValue(ns.hero, 1)
-    if (perHouse > 0) {
-      income.food = Math.floor(income.food * (1 + ns.buildings.house * perHouse))
-      income.food += ns.buildings.house * Math.round(perHouse * 100)
-    }
-  }
-
-  // 义勇：每名民兵各资源 +N（固定值，不吃任何百分比加成）
-  if (mods.militiaIncome > 0 && ns.soldiers.militia > 0) {
-    const militiaBonus = ns.soldiers.militia * mods.militiaIncome
-    income.food += militiaBonus
-    income.wood += militiaBonus
-    income.gold += militiaBonus
-  }
+  const income: Income = { ...gatherResources(ns), upkeep: 0, starved: 0 }
 
   ns.resources.food += income.food
   ns.resources.wood += income.wood
@@ -1086,37 +820,8 @@ export interface TurnPreview {
 }
 
 export function previewTurnIncome(s: GameState): TurnPreview {
-  const { foodPer, woodPer, goldPer } = gatherPerPerson(s)
+  const { food: foodGather, wood: woodGather, gold: goldGather } = gatherResources(s)
   const mods = collectMods(s)
-
-  let foodGather = s.assignment.food * foodPer
-  let woodGather = s.assignment.wood * woodPer
-  let goldGather = s.assignment.gold * goldPer
-  for (const mult of mods.gatherMults.food) foodGather = Math.floor(foodGather * mult)
-  for (const mult of mods.gatherMults.wood) woodGather = Math.floor(woodGather * mult)
-  for (const mult of mods.gatherMults.gold) goldGather = Math.floor(goldGather * mult)
-
-  // 英雄被动·采集加成（霍去病·军功授田 / 列奥尼达·遗志励耕）
-  const gatherMult = heroGatherMult(s)
-  foodGather = Math.floor(foodGather * gatherMult)
-  woodGather = Math.floor(woodGather * gatherMult)
-  goldGather = Math.floor(goldGather * gatherMult)
-
-  // 英雄被动·屯田戍边（李牧）：每座民居提升食物采集效率 +N%，并额外 +N 食物
-  if (s.hero && s.buildings.house > 0) {
-    const perHouse = passiveValue(s.hero, 1)
-    if (perHouse > 0) {
-      foodGather = Math.floor(foodGather * (1 + s.buildings.house * perHouse))
-      foodGather += s.buildings.house * Math.round(perHouse * 100)
-    }
-  }
-  // 义勇（固定值，不吃百分比加成）
-  if (mods.militiaIncome > 0 && s.soldiers.militia > 0) {
-    const militiaBonus = s.soldiers.militia * mods.militiaIncome
-    foodGather += militiaBonus
-    woodGather += militiaBonus
-    goldGather += militiaBonus
-  }
 
   const goldAfterGather = s.resources.gold + goldGather
   const interestRate = mods.interestRateMax + mods.interestRateAdd
@@ -1568,19 +1273,6 @@ function resolveBattle(s: GameState, wave: WaveInfo, modifier: DungeonModifier |
 }
 
 // ---------------- 地牢 ----------------
-
-export interface DungeonResult {
-  floor: number
-  wave: WaveInfo
-  modifiers: DungeonModifier[]
-  rounds: BattleRound[]
-  won: boolean
-  soldiersLost: Partial<Record<UnitId, number>>
-  soldiersRevived: Partial<Record<UnitId, number>>
-  honorGained: number
-  unitDetails: UnitDetail[]
-  enemyDetails: EnemyDetail
-}
 
 /** 无尽地牢每层固定荣誉 */
 const ENDLESS_DUNGEON_HONOR = 3

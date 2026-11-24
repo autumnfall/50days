@@ -4,7 +4,7 @@ import { formatSeed } from '@/game/rng'
 import { getRelic } from '@/game/relics'
 import { MobileTooltip } from '@/components/game/ui-bits'
 
-export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, onLoad }: { state: GameState; settleInfo?: SettleResult | null; onRestart: () => void; onRetrySeed?: () => void; onLoad?: (slot: number) => void }) {
+export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, onLoad }: { state: GameState; settleInfo?: SettleResult | null; onRestart: () => void; onRetrySeed?: () => void; onLoad?: () => void }) {
   const victory = state.phase === 'victory'
   const isRogue = state.mode === 'rogue'
   const daysHeld = isRogue ? state.day : Math.min(state.day, 50)
@@ -107,7 +107,7 @@ export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, o
         </button>
         {onLoad && (
           <button
-            onClick={() => onLoad(0)}
+            onClick={onLoad}
             className="mt-3 w-full rounded-xl border border-stone-700 bg-stone-800/60 py-3 text-sm font-bold text-stone-300 transition hover:border-stone-500 hover:bg-stone-700/60 active:scale-[0.98]"
           >
             📂 读取存档

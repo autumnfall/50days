@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { loadGame } from '@/game/save'
+import { loadGame, queueRecovery } from '@/game/save'
 import { reportError } from '@/lib/report-error'
 
 interface Props {
@@ -40,21 +40,18 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   handleLoadAutoSave = () => {
     const loaded = loadGame(0)
-    if (loaded) {
-      try {
-        sessionStorage.setItem('fiftyDays_recover_autosave', JSON.stringify({ ...loaded, skills: [...loaded.skills] }))
-      } catch {
-        // ignore
-      }
+    if (loaded.ok && queueRecovery(loaded.state)) {
+      window.location.reload()
+    } else {
+      this.setState({ error: new Error('无法恢复自动存档，请检查浏览器存储。') })
     }
-    window.location.reload()
   }
 
   render() {
     if (!this.state.hasError) return this.props.children
 
     const { error, errorInfo } = this.state
-    const hasAutoSave = !!loadGame(0)
+    const hasAutoSave = loadGame(0).ok
 
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-950 p-4 text-stone-200">

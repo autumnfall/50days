@@ -1,73 +1,30 @@
-# React + TypeScript + Vite
+# 五十日坚守
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+回合制生存策略游戏。分配村民、发展经济、训练军队、守住村庄。经典战役的目标是击败第 50 天的 Boss。无尽远征包含随种子变化的事件、战场词条与遗物。完成对局可获得传承点，用来为之后的对局配点。
 
-Currently, two official plugins are available:
+[在线游玩](https://autumnfall.github.io/50days/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 开发
 
-## React Compiler
+使用 Node.js 20（至少 20.19，见 `.nvmrc`）。
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sh
+npm ci
+npm run dev
+npm run lint
+npm test
+npx playwright install chromium
+npm run test:smoke
+npm run build
+npm run test:pwa
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+开发服务器默认使用 3000 端口。冒烟测试覆盖桌面和移动视口。PWA 测试在生产构建下模拟 `/50days/` 部署路径，验证离线开局。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+对局和传承进度保存在当前浏览器和站点来源中。自动存档在回合结算后更新，也可使用三个手动槽位。存档在清除站点数据或切换域名后不会自动迁移。
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 发布
+
+向 GitHub 的 `main` 推送后，[发布工作流](.github/workflows/deploy.yml) 会先运行检查，再将 `dist/` 发布到 GitHub Pages。Pages 的发布来源应设为 **GitHub Actions**。生产构建会生成版本化的 Service Worker，并缓存离线启动所需的资源。
+
+错误上报默认关闭。自行托管时，可在构建时设置 `VITE_ERROR_REPORT_URL`，并另行部署 `node server/error-logger.mjs`。接收服务默认绑定 `127.0.0.1:4000`，通过 `ALLOWED_ORIGINS` 设置允许的浏览器来源（多个来源以逗号分隔）。GitHub Pages 只托管静态资源。

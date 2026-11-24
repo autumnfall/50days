@@ -1,71 +1,72 @@
-/**
- * 最小错误日志接收服务（Node.js 原生 http，无需额外依赖）
- *
- * 用法：
- *   1. 把 .env.example 复制为 .env，填入 VITE_ERROR_REPORT_URL=http://localhost:4000/log-error
- *   2. node server/error-logger.mjs
- *   3. 日志会写入 server/logs/error-YYYY-MM-DD.log
- *
- * 部署到生产时，建议：
- *   - 加上域名/IP 白名单或简单鉴权
- *   - 使用 pm2 / systemd 托管
- *   - 日志接入 rotate（如 logrotate）
- */
-
 import http from 'node:http'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { appendFile, mkdir } from 'node:fs/promises'
 
-const PORT = process.env.PORT || 4000
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const LOG_DIR = path.join(__dirname, 'logs')
+const port = Number(process.env.PORT ?? 4000)
+const host = process.env.HOST ?? '127.0.0.1'
+const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000').split(',').map((origin) => origin.trim()))
+const logDir = new URL('./logs/', import.meta.url)
+const maxBytes = 16 * 1024
+const maxReportsPerMinute = 120
+const types = new Set(['react', 'global', 'unhandledrejection'])
+let minute = 0
+let reports = 0
 
-if (!fs.existsSync(LOG_DIR)) {
-  fs.mkdirSync(LOG_DIR, { recursive: true })
-}
+await mkdir(logDir, { recursive: true })
 
-function todayFile() {
-  const d = new Date()
-  const iso = d.toISOString().slice(0, 10)
-  return path.join(LOG_DIR, `error-${iso}.log`)
-}
-
-const server = http.createServer((req, res) => {
-  // 允许前端跨域上报
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-
+const server = http.createServer(async (req, res) => {
+  const origin = req.headers.origin
+  if (req.url !== '/log-error') return res.writeHead(404).end()
+  if (origin && !allowedOrigins.has(origin)) return res.writeHead(403).end()
+  if (origin) res.setHeader('Access-Control-Allow-Origin', origin)
+  res.setHeader('Vary', 'Origin')
   if (req.method === 'OPTIONS') {
-    res.writeHead(204)
-    res.end()
-    return
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    return res.writeHead(204).end()
   }
+  if (req.method !== 'POST') return res.writeHead(405, { Allow: 'POST, OPTIONS' }).end()
+  if (req.headers['content-type']?.split(';')[0] !== 'application/json') return res.writeHead(415).end()
 
-  if (req.method !== 'POST' || req.url !== '/log-error') {
-    res.writeHead(404)
-    res.end('Not Found')
-    return
-  }
+  const window = Math.floor(Date.now() / 60_000)
+  if (window !== minute) { minute = window; reports = 0 }
+  if (++reports > maxReportsPerMinute) return res.writeHead(429, { 'Retry-After': '60' }).end()
+  if (Number(req.headers['content-length']) > maxBytes) return res.writeHead(413, { Connection: 'close' }).end()
 
-  let body = ''
-  req.on('data', (chunk) => { body += chunk })
-  req.on('end', () => {
-    try {
-      const payload = JSON.parse(body)
-      const line = JSON.stringify({ receivedAt: new Date().toISOString(), ...payload })
-      fs.appendFileSync(todayFile(), line + '\n')
-      console.log('[error-logger]', payload.type, payload.message)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ ok: true }))
-    } catch (err) {
-      res.writeHead(400)
-      res.end('Bad Request')
+  const chunks = []
+  let bytes = 0
+  try {
+    for await (const chunk of req.iterator({ destroyOnReturn: false })) {
+      bytes += chunk.length
+      if (bytes > maxBytes) return res.writeHead(413, { Connection: 'close' }).end()
+      chunks.push(chunk)
     }
-  })
+  } catch {
+    return
+  }
+
+  let payload
+  try {
+    payload = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  } catch {
+    return res.writeHead(400).end()
+  }
+  if (!payload || !types.has(payload.type)) return res.writeHead(400).end()
+
+  const receivedAt = new Date().toISOString()
+  const fields = ['name', 'message', 'stack', 'componentStack', 'url', 'userAgent', 'timestamp', 'phase', 'mode']
+  const report = Object.fromEntries(fields.filter((key) => typeof payload[key] === 'string').map((key) => [key, payload[key]]))
+  if (Number.isSafeInteger(payload.day)) report.day = payload.day
+  try {
+    await appendFile(new URL(`error-${receivedAt.slice(0, 10)}.log`, logDir),
+      JSON.stringify({ ...report, receivedAt, type: payload.type }) + '\n')
+    return res.writeHead(204).end()
+  } catch (error) {
+    console.error('Error logger write failed:', error)
+    return res.writeHead(500).end()
+  }
 })
 
-server.listen(PORT, () => {
-  console.log(`Error logger listening on http://localhost:${PORT}/log-error`)
+server.requestTimeout = 15_000
+server.listen(port, host, () => {
+  console.log(`Error logger listening on ${host}:${port}/log-error`)
 })

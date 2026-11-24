@@ -233,6 +233,9 @@ export function mergeMods(base: EffectMods, c: EffectContrib): EffectMods {
 
 // ---------------- collectMods：单点收集 ----------------
 
+// 派生属性共用当前不可变状态快照的效果汇总。
+const modsByState = new WeakMap<GameState, EffectMods>()
+
 /**
  * 汇总一局内所有被动效果：纯数据 merge，读取各 Def 的 effects 声明。
  * 来源合并顺序（决定 mults 数组顺序，从而保持"每步取整"的逐位语义）：
@@ -240,6 +243,8 @@ export function mergeMods(base: EffectMods, c: EffectContrib): EffectMods {
  * 加新内容 = 在配置里加 effects 声明，此处无需改动。
  */
 export function collectMods(s: GameState): EffectMods {
+  const cached = modsByState.get(s)
+  if (cached) return cached
   let m = EMPTY_MODS
 
   // ---- 文明（被动部分；开局一次性 bonus 留在 chooseNation）----
@@ -263,5 +268,6 @@ export function collectMods(s: GameState): EffectMods {
   }
   if (s.upgrades.def > 0) m = mergeMods(m, { towerDmgFlat: 2 * s.upgrades.def, wallAbsorbFlat: 7 * s.upgrades.def })
 
+  modsByState.set(s, m)
   return m
 }

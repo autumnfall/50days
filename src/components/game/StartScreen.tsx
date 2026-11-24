@@ -128,7 +128,7 @@ const MODES: { id: GameMode; name: string; icon: string; tagline: string; desc: 
   },
 ]
 
-export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId, talents: string[], mode: GameMode, seed?: number, heroId?: string) => void; onLoad?: (slot: number) => void }) {
+export default function StartScreen({ onStart, onLoad }: { onStart: (nation: NationId, talents: string[], mode: GameMode, seed?: number, heroId?: string) => void; onLoad?: () => void }) {
   const [selected, setSelected] = useState<NationId | null>(null)
   const [hero, setHero] = useState<string | null>(null)
   const [mode, setMode] = useState<GameMode>('classic')
@@ -334,10 +334,10 @@ export default function StartScreen({ onStart, onLoad }: { onStart: (nation: Nat
 
         {onLoad && hasAnySave() && (
           <button
-            onClick={() => onLoad(0)}
+            onClick={onLoad}
             className="mt-3 w-full rounded-xl border border-stone-700 bg-stone-800/60 py-3 text-sm font-bold text-stone-300 transition hover:border-stone-500 hover:bg-stone-700/60 active:scale-[0.98]"
           >
-            📂 继续游戏（读取自动存档）
+            📂 继续游戏（读取存档）
           </button>
         )}
       </div>

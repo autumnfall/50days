@@ -124,6 +124,7 @@ export const TALENT_TREE_TOTAL_COST = TALENTS.reduce((sum, t) => sum + t.cost, 0
 // ---------------- MetaState 持久化 ----------------
 
 export interface MetaState {
+  settledGameIds: string[]
   /** 已获得的传承点（可自由分配/洗点，上限 TALENT_POINT_CAP） */
   earned: number
   /** 当前激活的天赋 id 配点 */
@@ -139,7 +140,7 @@ export interface MetaState {
 const META_KEY = 'fiftyDays_meta'
 
 export function defaultMeta(): MetaState {
-  return { earned: 0, talents: [], runs: 0, victories: 0, bestDay: 0, rogue: { runs: 0, bestDay: 0, bestWave: 0 } }
+  return { settledGameIds: [], earned: 0, talents: [], runs: 0, victories: 0, bestDay: 0, rogue: { runs: 0, bestDay: 0, bestWave: 0 } }
 }
 
 /** 存储抽象：浏览器用 localStorage，测试/无 DOM 环境降级为内存 */
@@ -161,6 +162,7 @@ export function loadMeta(): MetaState {
     const meta = { ...defaultMeta(), ...parsed }
     // 兼容旧档：肉鸽生涯记录
     meta.rogue = { ...defaultMeta().rogue, ...(parsed.rogue ?? {}) }
+    meta.settledGameIds = Array.isArray(meta.settledGameIds) ? meta.settledGameIds.filter((id: unknown) => typeof id === 'string') : []
     // 过滤已删除/未知的天赋 id，并重新校验合法性
     meta.talents = sanitizeTalents(meta.talents, meta.earned)
     return meta
@@ -169,10 +171,13 @@ export function loadMeta(): MetaState {
   }
 }
 
-export function saveMeta(meta: MetaState) {
+export function saveMeta(meta: MetaState): boolean {
   try {
     getStorage().setItem(META_KEY, JSON.stringify(meta))
-  } catch { /* quota exceeded – silently ignore */ }
+    return true
+  } catch {
+    return false
+  }
 }
 
 // ---------------- 配点校验 ----------------
@@ -253,6 +258,16 @@ export function settleRun(state: GameState, meta: MetaState): SettleResult {
     rawGain,
     victory,
   }
+}
+
+export function settleGameOnce(state: GameState): SettleResult | null {
+  const meta = loadMeta()
+  if (meta.settledGameIds.includes(state.gameId)) {
+    return { meta, gained: 0, rawGain: 0, victory: state.phase === 'victory' }
+  }
+  const result = settleRun(state, meta)
+  result.meta.settledGameIds = [...meta.settledGameIds, state.gameId]
+  return saveMeta(result.meta) ? result : null
 }
 
 /** 肉鸽模式结算：按坚守天数与击退波次阶梯给点（无胜利，守到覆灭为止） */

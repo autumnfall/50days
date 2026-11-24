@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   activateHeroSkill, applyEventChoice, assign, build, buyUpgrade, chooseNation, closeBattleReport, closeDungeonResult, createGame, endTurn,
   enterDungeon, exchangeForHonor, learnHeroActive, learnHeroPassive, recruit, recruitMax, train, unlockSkill, upgradeHero, waveChanceTomorrow,
   type GameMode, type GameState,
 } from '@/game/engine'
 import { CONFIG, NATIONS, type BuildingId, type NationId, type ResourceId, type UnitId, type UpgradeId } from '@/game/config'
-import { autoSave, consumeRecoverAutoSave, deleteSave, getAllSaveMetadata, loadGame, saveGame, type SaveMetadata } from '@/game/save'
-import { loadMeta, saveMeta as saveMetaProgress, settleRun, type SettleResult } from '@/game/meta'
+import { clearRecovery, readRecovery, deleteSave, getAllSaveMetadata, loadGame, saveGame, type SaveMetadata } from '@/game/save'
+import { settleGameOnce, type SettleResult } from '@/game/meta'
 import { isTutorialCompleted, markTutorialCompleted, TUTORIAL_STEPS } from '@/game/tutorial'
 import StartScreen from './StartScreen'
 import Header from './Header'
@@ -70,8 +70,16 @@ function EndTurnButton({ state, onEndTurn, className }: { state: GameState; onEn
   )
 }
 
+const desktopQuery = '(min-width: 1024px)'
+function subscribeToDesktop(onChange: () => void) {
+  const query = window.matchMedia(desktopQuery)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+const isDesktop = () => window.matchMedia(desktopQuery).matches
+
 export default function Game() {
-  const [state, setState] = useState<GameState>(() => consumeRecoverAutoSave() ?? createGame())
+  const [state, setState] = useState<GameState>(() => readRecovery() ?? createGame())
   const [saveLoadOpen, setSaveLoadOpen] = useState(false)
   const [saveLoadMode, setSaveLoadMode] = useState<'save' | 'load'>('save')
   const [saveMeta, setSaveMeta] = useState<(SaveMetadata | null)[]>(() => getAllSaveMetadata())
@@ -79,22 +87,26 @@ export default function Game() {
   const [showHelp, setShowHelp] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('village')
   const [settleInfo, setSettleInfo] = useState<SettleResult | null>(null)
-  const settledForRef = useRef<GameState | null>(null)
-  /** 本局开局参数（肉鸽模式「同 seed 再战」用） */
-  const lastStartRef = useRef<{ nation: NationId; talents: string[]; mode: GameMode; seed?: number; hero?: string } | null>(null)
+  const settledState = useRef<GameState | null>(null)
+  const desktop = useSyncExternalStore(subscribeToDesktop, isDesktop)
+  const [storageNotice, setStorageNotice] = useState<string | null>(null)
   const refreshMeta = useCallback(() => setSaveMeta(getAllSaveMetadata()), [])
 
-  // 局结束结算：传承点 + 生涯记录（每局只结算一次，ref 防 StrictMode 双写）
+  useEffect(clearRecovery, [])
+
   useEffect(() => {
     if (state.phase !== 'victory' && state.phase !== 'defeat') return
-    if (settledForRef.current === state) return
-    settledForRef.current = state
-    const result = settleRun(state, loadMeta())
-    saveMetaProgress(result.meta)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (state.battle || settledState.current === state) return
+    const result = settleGameOnce(state)
+    if (!result) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStorageNotice('传承进度保存失败。可在存储恢复后读取自动存档重新结算。')
+      return
+    }
+    settledState.current = state
     setSettleInfo(result)
-    // 胜负已分：删除自动存档，防止反复读取最后一回合刷传承点
-    deleteSave(0)
+    const auto = loadGame(0)
+    if (auto.ok && auto.state.gameId === state.gameId) deleteSave(0)
     refreshMeta()
   }, [state, refreshMeta])
 
@@ -108,25 +120,35 @@ export default function Game() {
   }, [])
 
   const onStart = useCallback((nation: NationId, talents: string[], mode: GameMode, seed?: number, heroId?: string) => {
-    lastStartRef.current = { nation, talents, mode, seed, hero: heroId }
+    setStorageNotice(null)
+    setMobileTab('village')
     setState(chooseNation(createGame(talents, { mode, seed, hero: heroId }), nation))
     if (!isTutorialCompleted()) setTutorialStep(0)
   }, [])
-  const onRestart = useCallback(() => { settledForRef.current = null; setSettleInfo(null); setState(createGame()) }, [])
-  /** 肉鸽模式：以相同 seed/文明/天赋直接再战一局 */
-  const onRetrySeed = useCallback(() => {
-    const last = lastStartRef.current
-    settledForRef.current = null
+  const onRestart = useCallback(() => {
     setSettleInfo(null)
-    if (!last) { setState(createGame()); return }
-    setState(chooseNation(createGame(last.talents, { mode: last.mode, seed: last.seed, hero: last.hero }), last.nation))
+    setStorageNotice(null)
+    setState(createGame())
   }, [])
+  const onRetrySeed = useCallback(() => {
+    if (!state.run || !state.nation) return
+    setSettleInfo(null)
+    setStorageNotice(null)
+    setMobileTab('village')
+    setState(chooseNation(createGame(state.talents, { mode: 'rogue', seed: state.run.seed, hero: state.hero?.id }), state.nation))
+  }, [state])
   const onAssign = useCallback((res: ResourceId, delta: number) => setState((s) => assign(s, res, delta)), [])
   const onBuild = useCallback((id: BuildingId) => setState((s) => build(s, id)), [])
   const onTrain = useCallback((id: UnitId) => setState((s) => train(s, id)), [])
   const onRecruit = useCallback(() => setState((s) => recruit(s)), [])
   const onRecruitMax = useCallback(() => setState((s) => recruitMax(s)), [])
-  const onEndTurn = useCallback(() => setState((s) => { const next = endTurn(s); autoSave(next); return next }), [])
+  const onEndTurn = useCallback(() => {
+    if (state.pendingEvent) return
+    const next = endTurn(state)
+    if (next === state) return
+    setState(next)
+    setStorageNotice(saveGame(next, 0) ? null : '自动存档失败，请检查浏览器存储空间。')
+  }, [state])
   const onCloseBattle = useCallback(() => setState((s) => closeBattleReport(s)), [])
   const onUnlock = useCallback((id: string) => setState((s) => unlockSkill(s, id)), [])
   const onBuyUpgrade = useCallback((id: UpgradeId) => setState((s) => buyUpgrade(s, id)), [])
@@ -139,9 +161,30 @@ export default function Game() {
   const onLearnActive = useCallback(() => setState((s) => learnHeroActive(s)), [])
   const onActivateHeroSkill = useCallback(() => setState((s) => activateHeroSkill(s)), [])
 
-  const onSave = useCallback((slot: number) => { setState((s) => { saveGame(s, slot); return s }); refreshMeta() }, [refreshMeta])
-  const onLoad = useCallback((slot: number) => { const loaded = loadGame(slot); if (loaded) setState(loaded) }, [])
-  const onDelete = useCallback((slot: number) => { deleteSave(slot); refreshMeta() }, [refreshMeta])
+  const onSave = useCallback((slot: number) => {
+    const saved = saveGame(state, slot)
+    setStorageNotice(saved ? null : '保存失败，请检查浏览器存储空间。')
+    if (saved) refreshMeta()
+    return saved
+  }, [state, refreshMeta])
+  const onLoad = useCallback((slot: number) => {
+    const loaded = loadGame(slot)
+    if (!loaded.ok) {
+      setStorageNotice(loaded.reason === 'invalid' ? '存档已损坏或版本不兼容。'
+        : loaded.reason === 'unavailable' ? '浏览器存储不可用。' : '该槽位没有存档。')
+      return false
+    }
+    setStorageNotice(null)
+    setSettleInfo(null)
+    setMobileTab('village')
+    setTutorialStep(null)
+    setState(loaded.state)
+    return true
+  }, [])
+  const onDelete = useCallback((slot: number) => {
+    setStorageNotice(deleteSave(slot) ? null : '删除存档失败。')
+    refreshMeta()
+  }, [refreshMeta])
   const onOpenSaveLoad = useCallback((mode: 'save' | 'load') => { refreshMeta(); setSaveLoadMode(mode); setSaveLoadOpen(true) }, [refreshMeta])
 
   const onTutorial = useCallback(() => gotoTutorialStep(0), [gotoTutorialStep])
@@ -155,16 +198,35 @@ export default function Game() {
   }, [tutorialStep, gotoTutorialStep])
   const tutorialSkip = useCallback(() => { markTutorialCompleted(); gotoTutorialStep(null) }, [gotoTutorialStep])
 
-  if (state.phase === 'start') return <StartScreen onStart={onStart} onLoad={onLoad} />
-  // 战败但还有未看的最后一战战报：先走完正常布局 + 战报弹窗，关闭战报后才进结算页
-  if (state.phase === 'victory' || (state.phase === 'defeat' && !state.battle)) return <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onRetrySeed={onRetrySeed} onLoad={onLoad} />
+  const openLoad = () => onOpenSaveLoad('load')
 
-  return (
+  return <>
+    {saveLoadOpen && (
+      <SaveLoadModal
+        open
+        mode={saveLoadMode}
+        metadata={saveMeta}
+        onClose={() => setSaveLoadOpen(false)}
+        onSave={onSave}
+        onLoad={onLoad}
+        onDelete={onDelete}
+      />
+    )}
+    {storageNotice && (
+      <div role="alert" className="fixed inset-x-3 top-3 z-[90] mx-auto flex max-w-lg items-center justify-between gap-3 rounded-lg border border-red-700 bg-stone-900 p-3 text-sm text-red-200 shadow-lg">
+        {storageNotice}
+        <button onClick={() => setStorageNotice(null)} aria-label="关闭提示">✕</button>
+      </div>
+    )}
+    {state.phase === 'start' ? <StartScreen onStart={onStart} onLoad={openLoad} />
+      : state.phase === 'victory' || (state.phase === 'defeat' && !state.battle)
+        ? <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onRetrySeed={onRetrySeed} onLoad={saveMeta.some(Boolean) ? openLoad : undefined} />
+        : (
     <div className="flex min-h-dvh flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-stone-950 text-stone-100">
       <Header state={state} onOpenSaveLoad={onOpenSaveLoad} onTutorial={onTutorial} onHelp={onHelp} />
 
       {/* ============ 桌面端：三栏布局（lg 起） ============ */}
-      <main className="mx-auto hidden w-full max-w-7xl flex-1 gap-4 p-4 lg:grid lg:grid-cols-[290px_1fr_330px]">
+      {desktop ? <main className="mx-auto hidden w-full max-w-7xl flex-1 gap-4 p-4 lg:grid lg:grid-cols-[290px_1fr_330px]">
         {/* 左栏：村民 + 军队 */}
         <div className="flex flex-col gap-4">
           <AssignmentPanel state={state} onAssign={onAssign} />
@@ -197,8 +259,7 @@ export default function Game() {
         </div>
       </main>
 
-      {/* ============ 移动端：底部 Tab 导航（lg 以下） ============ */}
-      <main className="mx-auto w-full max-w-xl flex-1 px-3 pb-40 pt-16 lg:hidden">
+      : <main className="mx-auto w-full max-w-xl flex-1 px-3 pb-40 pt-16 lg:hidden">
         {mobileTab === 'village' && (
           <div className="flex flex-col gap-3">
             <VillageView state={state} />
@@ -227,10 +288,10 @@ export default function Game() {
             <RelicPanel state={state} />
           </>
         )}
-      </main>
+      </main>}
 
       {/* 移动端固定底栏：常驻结束回合 + Tab 导航（不用 backdrop-blur：常驻大区域模糊会触发 Chromium 合成层重绘故障，导致内容偶发不显示） */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-700/60 bg-stone-950 px-3 pb-[env(safe-area-inset-bottom)] pt-2 lg:hidden">
+      {!desktop && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-700/60 bg-stone-950 px-3 pb-[env(safe-area-inset-bottom)] pt-2 lg:hidden">
         <EndTurnButton state={state} onEndTurn={onEndTurn} className="py-3 text-base" />
         <nav className="mt-2 flex items-stretch justify-between gap-1 pb-1">
           {MOBILE_TABS.map((tab) => {
@@ -256,7 +317,7 @@ export default function Game() {
             )
           })}
         </nav>
-      </div>
+      </div>}
 
       {(state.phase === 'battle' || state.phase === 'defeat') && state.battle && (
         <BattleModal report={state.battle} onClose={onCloseBattle} key={`battle-${state.day}`} closeLabel={state.phase === 'defeat' ? '查看结局' : undefined} />
@@ -269,15 +330,6 @@ export default function Game() {
       )}
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-      <SaveLoadModal
-        open={saveLoadOpen}
-        mode={saveLoadMode}
-        metadata={saveMeta}
-        onClose={() => setSaveLoadOpen(false)}
-        onSave={onSave}
-        onLoad={onLoad}
-        onDelete={onDelete}
-      />
       {tutorialStep !== null && state.phase === 'playing' && !state.pendingEvent && (
         <TutorialOverlay
           step={tutorialStep}
@@ -287,5 +339,6 @@ export default function Game() {
         />
       )}
     </div>
-  )
+    )}
+  </>
 }

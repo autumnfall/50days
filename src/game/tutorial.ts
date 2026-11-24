@@ -13,11 +13,11 @@ export interface TutorialStep {
 const STORAGE_KEY = 'fiftyDays_tutorialCompleted'
 
 export function isTutorialCompleted(): boolean {
-  return localStorage.getItem(STORAGE_KEY) === 'true'
+  try { return localStorage.getItem(STORAGE_KEY) === 'true' } catch { return false }
 }
 
 export function markTutorialCompleted() {
-  localStorage.setItem(STORAGE_KEY, 'true')
+  try { localStorage.setItem(STORAGE_KEY, 'true') } catch { /* 存储不可用 */ }
 }
 
 export function resetTutorial() {

@@ -27,8 +27,8 @@ interface Props {
   mode: 'save' | 'load'
   metadata: (SaveMetadata | null)[]
   onClose: () => void
-  onSave: (slot: number) => void
-  onLoad: (slot: number) => void
+  onSave: (slot: number) => boolean
+  onLoad: (slot: number) => boolean
   onDelete: (slot: number) => void
 }
 
@@ -42,20 +42,15 @@ export default function SaveLoadModal({ open, mode, metadata, onClose, onSave, o
       if (meta) {
         setConfirmSlot(slot)
       } else {
-        onSave(slot)
-        onClose()
+        if (onSave(slot)) onClose()
       }
     } else {
-      if (meta) {
-        onLoad(slot)
-        onClose()
-      }
+      if (meta && onLoad(slot)) onClose()
     }
   }
 
   const handleConfirm = () => {
-    if (confirmSlot !== null) {
-      onSave(confirmSlot)
+    if (confirmSlot !== null && onSave(confirmSlot)) {
       setConfirmSlot(null)
       onClose()
     }
@@ -121,7 +116,7 @@ export default function SaveLoadModal({ open, mode, metadata, onClose, onSave, o
                     {meta ? (
                       <div className="mt-0.5 text-xs text-stone-400">
                         {meta.nation && <span>{NATIONS[meta.nation].icon} {NATIONS[meta.nation].name} · </span>}
-                        第 {meta.day} 天 · {phaseLabel[meta.phase] ?? meta.phase} · {formatTime(meta.timestamp)}
+                        {meta.timestamp ? `第 ${meta.day} 天 · ${phaseLabel[meta.phase]} · ${formatTime(meta.timestamp)}` : '存档信息缺失'}
                       </div>
                     ) : (
                       <div className="mt-0.5 text-xs text-stone-600">空</div>
