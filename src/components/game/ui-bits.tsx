@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import type { LucideIcon } from 'lucide-react'
 import { RESOURCE_INFO, type ResourceId } from '@/game/config'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
+import { RESOURCE_ICONS } from './icons'
 
 /** 资源花费标签 */
 export function CostTag({ cost, resources }: { cost: Partial<Record<ResourceId, number>>; resources: Record<ResourceId, number> }) {
@@ -10,9 +12,11 @@ export function CostTag({ cost, resources }: { cost: Partial<Record<ResourceId, 
     <span className="inline-flex items-center gap-1.5">
       {(Object.entries(cost) as [ResourceId, number][]).map(([r, v]) => {
         const enough = resources[r] >= v
+        const ResourceIcon = RESOURCE_ICONS[r]
         return (
           <span key={r} className={cn('inline-flex items-center gap-0.5 text-xs font-medium', enough ? 'text-stone-300' : 'text-red-400')}>
-            <span>{RESOURCE_INFO[r].icon}</span>
+            <ResourceIcon size={13} aria-hidden="true" />
+            <span className="sr-only">{RESOURCE_INFO[r].name}</span>
             <span>{v}</span>
           </span>
         )
@@ -22,9 +26,9 @@ export function CostTag({ cost, resources }: { cost: Partial<Record<ResourceId, 
 }
 
 /** 面板容器 */
-export function Panel({ title, icon, children, className, extra, ...rest }: {
+export function Panel({ title, icon: Icon, children, className, extra, ...rest }: {
   title: string
-  icon: string
+  icon: LucideIcon
   children: ReactNode
   className?: string
   extra?: ReactNode
@@ -32,10 +36,10 @@ export function Panel({ title, icon, children, className, extra, ...rest }: {
   return (
     // 不用 backdrop-blur：常驻面板上的背景模糊在 Chromium 下会触发合成层重绘故障，
     // 切换/滚动时面板内容偶发整块不显示、待下次重绘才恢复；改用更高不透明度背景补偿
-    <section className={cn('rounded-xl border border-stone-700/60 bg-stone-900/90 shadow-lg', className)} {...rest}>
-      <header className="flex items-center justify-between gap-2 border-b border-stone-700/60 px-4 py-2.5 flex-nowrap min-w-0">
-        <h2 className="flex items-center gap-2 text-sm font-bold tracking-wide text-stone-200 shrink-0">
-          <span className="text-base">{icon}</span>
+    <section className={cn('game-panel', className)} {...rest}>
+      <header className="game-panel-heading flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3.5 py-2.5">
+        <h2 className="flex items-center gap-2 text-sm font-bold tracking-wide text-amber-100">
+          <span className="panel-emblem"><Icon size={15} aria-hidden="true" /></span>
           {title}
         </h2>
         {extra}
@@ -74,11 +78,11 @@ export function MobileTooltip({ content, children, className }: {
       </span>
       {open && createPortal(
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[70] flex items-center justify-center game-scrim bg-black/70 p-4 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
           <div
-            className="relative w-full max-w-xs rounded-xl border border-stone-600 bg-stone-900 p-4 text-sm leading-relaxed text-stone-200 shadow-2xl"
+            className="game-dialog relative w-full max-w-xs rounded-xl border border-stone-600 bg-stone-900 p-4 text-sm leading-relaxed text-stone-200 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { Castle, Hammer, Hourglass, Medal, Sparkles, Swords, Users } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   activateHeroSkill, applyEventChoice, assign, build, buyUpgrade, chooseNation, closeBattleReport, closeDungeonResult, createGame, endTurn,
   enterDungeon, exchangeForHonor, learnHeroActive, learnHeroPassive, recruit, recruitMax, train, unlockSkill, upgradeHero, waveChanceTomorrow,
@@ -31,12 +32,12 @@ import { cn } from '@/lib/utils'
 
 type MobileTab = 'village' | 'people' | 'army' | 'build' | 'skill'
 
-const MOBILE_TABS: { id: MobileTab; icon: string; label: string }[] = [
-  { id: 'village', icon: '🏘️', label: '村庄' },
-  { id: 'people', icon: '👥', label: '村民' },
-  { id: 'army', icon: '🎖️', label: '军队' },
-  { id: 'build', icon: '🔨', label: '建造' },
-  { id: 'skill', icon: '✨', label: '技能' },
+const MOBILE_TABS: { id: MobileTab; icon: typeof Castle; label: string }[] = [
+  { id: 'village', icon: Castle, label: '村庄' },
+  { id: 'people', icon: Users, label: '村民' },
+  { id: 'army', icon: Swords, label: '军队' },
+  { id: 'build', icon: Hammer, label: '建造' },
+  { id: 'skill', icon: Sparkles, label: '技能' },
 ]
 
 /** 教程步骤 → 移动端需要切换到的 Tab（面板只在对应 Tab 激活时渲染） */
@@ -54,12 +55,15 @@ function EndTurnButton({ state, onEndTurn, className }: { state: GameState; onEn
       onClick={onEndTurn}
       data-tutorial="end-turn"
       className={cn(
-        'group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 py-4 text-lg font-black tracking-[0.4em] text-stone-950 shadow-lg transition hover:from-amber-500 hover:to-amber-400 hover:shadow-amber-500/25 active:scale-[0.99]',
+        'game-primary turn-action w-full px-3 py-3',
         className,
       )}
     >
-      {state.mode === 'rogue' ? '结束回合 ⏭' : state.day >= CONFIG.totalDays - 1 ? '⚔️ 迎接终局决战' : '结束回合 ⏭'}
-      <span className="block text-[11px] font-medium tracking-normal text-stone-800/80">
+      <span className="flex items-center justify-center gap-2 text-base font-bold tracking-wide">
+        <Hourglass size={17} aria-hidden="true" />
+        {state.mode === 'classic' && state.day >= CONFIG.totalDays - 1 ? '迎接终局决战' : '结束回合'}
+      </span>
+      <span className="mt-1 block text-xs font-medium">
         {state.mode === 'rogue'
           ? `无尽远征 · 进入第 ${state.day + 1} 天${(state.day + 1) % CONFIG.rogue.blessingInterval === 0 ? '（🎁 远征祝福）' : ''}${(state.day + 1) % CONFIG.rogue.bossInterval === 0 ? '（💀 黑暗领主必来！）' : waveChanceTomorrow(state) > 0 ? `（敌军来袭概率 ${Math.round(waveChanceTomorrow(state) * 100)}%）` : ''}`
           : state.day >= CONFIG.totalDays - 1
@@ -91,6 +95,14 @@ export default function Game() {
   const desktop = useSyncExternalStore(subscribeToDesktop, isDesktop)
   const [storageNotice, setStorageNotice] = useState<string | null>(null)
   const refreshMeta = useCallback(() => setSaveMeta(getAllSaveMetadata()), [])
+
+  const screen = state.phase === 'start' ? 'start'
+    : state.phase === 'victory' || (state.phase === 'defeat' && !state.battle) ? 'end' : 'campaign'
+  const activeTab = desktop ? null : mobileTab
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+  }, [screen, state.gameId, activeTab])
 
   useEffect(clearRecovery, [])
 
@@ -218,23 +230,23 @@ export default function Game() {
         <button onClick={() => setStorageNotice(null)} aria-label="关闭提示">✕</button>
       </div>
     )}
-    {state.phase === 'start' ? <StartScreen onStart={onStart} onLoad={openLoad} />
-      : state.phase === 'victory' || (state.phase === 'defeat' && !state.battle)
+    {screen === 'start' ? <StartScreen onStart={onStart} onLoad={openLoad} />
+      : screen === 'end'
         ? <EndScreen state={state} settleInfo={settleInfo} onRestart={onRestart} onRetrySeed={onRetrySeed} onLoad={saveMeta.some(Boolean) ? openLoad : undefined} />
         : (
-    <div className="flex min-h-dvh flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-stone-950 text-stone-100">
+    <div className="game-shell flex min-h-dvh flex-col">
       <Header state={state} onOpenSaveLoad={onOpenSaveLoad} onTutorial={onTutorial} onHelp={onHelp} />
 
       {/* ============ 桌面端：三栏布局（lg 起） ============ */}
-      {desktop ? <main className="mx-auto hidden w-full max-w-7xl flex-1 gap-4 p-4 lg:grid lg:grid-cols-[290px_1fr_330px]">
+      {desktop ? <main className="mx-auto hidden w-full max-w-7xl flex-1 gap-3 p-4 lg:grid lg:grid-cols-[minmax(252px,1fr)_minmax(0,1.9fr)_minmax(260px,1.1fr)] xl:gap-4">
         {/* 左栏：村民 + 军队 */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-3 xl:gap-4">
           <AssignmentPanel state={state} onAssign={onAssign} />
           <ArmyPanel state={state} onTrain={onTrain} />
         </div>
 
         {/* 中栏：村庄视图 + 结束回合 + 地牢 + 日志 */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-3 xl:gap-4">
           <VillageView state={state} />
           <EndTurnButton state={state} onEndTurn={onEndTurn} />
           <DungeonPanel state={state} onEnter={onEnterDungeon} />
@@ -242,13 +254,13 @@ export default function Game() {
         </div>
 
         {/* 右栏：建造 + 技能树 */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-3 xl:gap-4">
           <BuildPanel state={state} onBuild={onBuild} onRecruit={onRecruit} onRecruitMax={onRecruitMax} />
           <Panel
             title={`技能树 · ${state.nation ? NATIONS[state.nation].name : ''}`}
-            icon="✨"
+            icon={Sparkles}
             data-tutorial="skill-tree"
-            extra={<span className="text-xs text-stone-400">荣耀 <b className="text-amber-300">🏅{state.honor}</b></span>}
+            extra={<span className="inline-flex items-center gap-1 text-xs text-stone-400"><Medal className="text-amber-300" size={14} aria-hidden="true" />荣耀 <b className="text-amber-300">{state.honor}</b></span>}
           >
             <SkillTree state={state} onUnlock={onUnlock} onBuyUpgrade={onBuyUpgrade} onExchange={onExchange} />
           </Panel>
@@ -259,7 +271,7 @@ export default function Game() {
         </div>
       </main>
 
-      : <main className="mx-auto w-full max-w-xl flex-1 px-3 pb-40 pt-16 lg:hidden">
+      : <main className="mx-auto w-full max-w-xl flex-1 px-3 pb-40 pt-3 lg:hidden">
         {mobileTab === 'village' && (
           <div className="flex flex-col gap-3">
             <VillageView state={state} />
@@ -276,9 +288,9 @@ export default function Game() {
           <>
             <Panel
               title={`技能树 · ${state.nation ? NATIONS[state.nation].name : ''}`}
-              icon="✨"
+              icon={Sparkles}
               data-tutorial="skill-tree"
-              extra={<span className="text-xs text-stone-400">荣耀 <b className="text-amber-300">🏅{state.honor}</b></span>}
+              extra={<span className="inline-flex items-center gap-1 text-xs text-stone-400"><Medal className="text-amber-300" size={14} aria-hidden="true" />荣耀 <b className="text-amber-300">{state.honor}</b></span>}
             >
               <SkillTree state={state} onUnlock={onUnlock} onBuyUpgrade={onBuyUpgrade} onExchange={onExchange} />
             </Panel>
@@ -291,23 +303,26 @@ export default function Game() {
       </main>}
 
       {/* 移动端固定底栏：常驻结束回合 + Tab 导航（不用 backdrop-blur：常驻大区域模糊会触发 Chromium 合成层重绘故障，导致内容偶发不显示） */}
-      {!desktop && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-700/60 bg-stone-950 px-3 pb-[env(safe-area-inset-bottom)] pt-2 lg:hidden">
-        <EndTurnButton state={state} onEndTurn={onEndTurn} className="py-3 text-base" />
+      {!desktop && <div className="war-room-dock fixed inset-x-0 bottom-0 z-30 px-3 pb-[env(safe-area-inset-bottom)] pt-2 lg:hidden">
+        <EndTurnButton state={state} onEndTurn={onEndTurn} className="py-2.5" />
         <nav className="mt-2 flex items-stretch justify-between gap-1 pb-1">
           {MOBILE_TABS.map((tab) => {
             const active = mobileTab === tab.id
+            const TabIcon = tab.icon
             const idleBadge = tab.id === 'people' ? state.villagers - state.assignment.food - state.assignment.wood - state.assignment.gold : 0
             return (
               <button
                 key={tab.id}
                 onClick={() => setMobileTab(tab.id)}
+                aria-pressed={active}
+                aria-label={tab.label}
                 className={cn(
-                  'relative flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 transition',
-                  active ? 'bg-amber-900/40 text-amber-200' : 'text-stone-400 hover:bg-stone-800/60 hover:text-stone-200',
+                  'war-room-tab relative flex flex-1 flex-col items-center gap-1 rounded-md py-1.5 transition',
+                  active ? 'bg-amber-400/10 text-amber-200' : 'text-stone-400 hover:bg-stone-800/60 hover:text-stone-200',
                 )}
               >
-                <span className="text-lg leading-none">{tab.icon}</span>
-                <span className="text-[10px] font-bold">{tab.label}</span>
+                <TabIcon size={19} aria-hidden="true" />
+                <span className="text-xs font-bold">{tab.label}</span>
                 {idleBadge > 0 && (
                   <span className="absolute right-1.5 top-0.5 rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white">
                     {idleBadge}

@@ -62,7 +62,7 @@ export default function TutorialOverlay({
       }
       const mobile = getViewport().width < 1024
       el.scrollIntoView({ block: mobile ? 'start' : 'center', behavior: 'instant' })
-      if (mobile) window.scrollBy({ top: -64, behavior: 'auto' })
+      if (mobile) window.scrollBy({ top: -8, behavior: 'auto' })
       measureTarget()
     }
     frame = requestAnimationFrame(scrollAndMeasure)
@@ -92,7 +92,7 @@ export default function TutorialOverlay({
     const isMobile = vw < 1024
     const gap = 12
     const padding = 8
-    const headerRoom = isMobile ? 64 : 8 // 移动端给固定 Header 留空间
+    const headerRoom = 8
 
     // 估算 tooltip 尺寸（未渲染时按默认宽度给初值，随后会重算）
     const estimateRect = (): { width: number; height: number } => {

@@ -82,18 +82,3 @@
   from { opacity: 0; transform: scale(0.9) translateY(10px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
-
-/* 游戏日志滚动条 */
-.game-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-.game-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.game-scroll::-webkit-scrollbar-thumb {
-  background: #57534e;
-  border-radius: 3px;
-}
-.game-scroll::-webkit-scrollbar-thumb:hover {
-  background: #78716c;
-}

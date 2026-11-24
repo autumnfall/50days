@@ -64,9 +64,9 @@ export default function SaveLoadModal({ open, mode, metadata, onClose, onSave, o
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center game-scrim bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-stone-600 bg-stone-900 shadow-2xl"
+        className="game-dialog max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-stone-600 bg-stone-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-700 bg-stone-900/95 px-6 py-4 backdrop-blur">

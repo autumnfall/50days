@@ -1,3 +1,4 @@
+import { DoorOpen, Infinity as InfinityIcon, LockKeyhole, Medal } from 'lucide-react'
 import { useState } from 'react'
 import { DUNGEON_FLOORS, estimateDungeonPower } from '@/game/dungeon'
 import type { GameState } from '@/game/engine'
@@ -32,7 +33,7 @@ export default function DungeonPanel({
   return (
     <Panel
       title="地牢探险"
-      icon="🏚️"
+      icon={DoorOpen}
       extra={
         <span className="text-xs text-stone-400">
           {hasExtraCharge
@@ -63,7 +64,7 @@ export default function DungeonPanel({
                   isSelected && 'ring-1 ring-amber-500/50',
                 )}
               >
-                <span className="text-lg">{f.icon}</span>
+                <DoorOpen className="shrink-0 text-stone-300" size={18} aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className={cn('text-sm font-bold', cleared ? 'text-emerald-300' : 'text-stone-200')}>
@@ -75,10 +76,10 @@ export default function DungeonPanel({
                   <div className="text-xs text-stone-500">
                     战力 {estimateDungeonPower(f.wave).min}~{estimateDungeonPower(f.wave).max}
                     {' · '}
-                    <span className="text-amber-400">🏅{f.honor}</span>
+                    <span className="inline-flex items-center gap-0.5 text-amber-400"><Medal size={12} aria-hidden="true" />{f.honor}</span>
                   </div>
                 </div>
-                {locked && <span className="text-xs text-stone-600">🔒</span>}
+                {locked && <LockKeyhole className="text-stone-400" size={13} aria-hidden="true" />}
               </button>
 
               {/* 展开的详情 */}
@@ -107,7 +108,7 @@ export default function DungeonPanel({
                 selected === endlessFloor.floor && 'ring-1 ring-purple-500/50',
               )}
             >
-              <span className="text-lg">{endlessFloor.icon}</span>
+              <InfinityIcon className="shrink-0 text-purple-300" size={18} aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-purple-200">{endlessFloor.floor}F 无尽</span>
@@ -116,7 +117,7 @@ export default function DungeonPanel({
                 <div className="text-xs text-stone-500">
                   战力 {estimateDungeonPower(endlessFloor.wave).min}~{estimateDungeonPower(endlessFloor.wave).max}
                   {' · '}
-                  <span className="text-amber-400">🏅{endlessFloor.honor}</span>
+                  <span className="inline-flex items-center gap-0.5 text-amber-400"><Medal size={12} aria-hidden="true" />{endlessFloor.honor}</span>
                 </div>
               </div>
             </button>

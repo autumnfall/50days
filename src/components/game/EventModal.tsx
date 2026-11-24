@@ -1,3 +1,4 @@
+import { ScrollText, Sparkles, TriangleAlert } from 'lucide-react'
 import { RESOURCE_INFO, type GameEvent, type ResourceId } from '@/game/config'
 import { soldierCount, type GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
@@ -12,7 +13,7 @@ export default function EventModal({
   onChoose: (choiceId: string) => void
 }) {
   const theme = {
-    good: { border: 'border-emerald-500/60', bg: 'bg-emerald-950/40', title: 'text-emerald-300' },
+    good: { border: 'border-sky-500/60', bg: 'bg-sky-950/40', title: 'text-sky-200' },
     bad: { border: 'border-red-500/60', bg: 'bg-red-950/40', title: 'text-red-300' },
     neutral: { border: 'border-purple-500/60', bg: 'bg-purple-950/40', title: 'text-purple-300' },
   }[event.kind]
@@ -31,10 +32,12 @@ export default function EventModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className={cn('w-full max-w-md max-h-[92vh] overflow-y-auto animate-[popIn_0.25s_ease-out] rounded-2xl border bg-stone-900 shadow-2xl', theme.border)}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center game-scrim bg-black/60 p-4 backdrop-blur-sm">
+      <div className={cn('game-dialog w-full max-w-md max-h-[92vh] overflow-y-auto animate-[popIn_0.25s_ease-out] rounded-2xl border bg-stone-900 shadow-2xl', theme.border)}>
         <div className={cn('px-6 py-5 text-center', theme.bg)}>
-          <div className="text-5xl">{event.icon}</div>
+          <span className="campaign-emblem mx-auto" aria-hidden="true">
+            {event.id === 'blessing' ? <Sparkles size={23} /> : event.kind === 'bad' ? <TriangleAlert size={23} /> : <ScrollText size={23} />}
+          </span>
           <h2 className={cn('mt-2 text-lg font-black tracking-widest', theme.title)}>{event.title}</h2>
           <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-stone-500">
             {event.id === 'blessing' ? '远征祝福 · 三选一' : '随机事件 · 请抉择'}

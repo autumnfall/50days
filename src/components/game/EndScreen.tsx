@@ -1,3 +1,4 @@
+import { ShieldX, Swords, Trophy } from 'lucide-react'
 import type { GameState } from '@/game/engine'
 import { TALENT_POINT_CAP, type SettleResult } from '@/game/meta'
 import { formatSeed } from '@/game/rng'
@@ -9,18 +10,12 @@ export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, o
   const isRogue = state.mode === 'rogue'
   const daysHeld = isRogue ? state.day : Math.min(state.day, 50)
   return (
-    <div
-      className={`relative flex min-h-dvh items-center justify-center px-4 ${
-        victory
-          ? 'bg-gradient-to-b from-amber-950/60 via-stone-950 to-stone-950'
-          : isRogue
-            ? 'bg-gradient-to-b from-purple-950/50 via-stone-950 to-stone-950'
-            : 'bg-gradient-to-b from-red-950/50 via-stone-950 to-stone-950'
-      }`}
-    >
-      <div className="w-full max-w-xl rounded-2xl border border-stone-700/60 bg-stone-900/85 p-10 text-center shadow-2xl backdrop-blur-md">
-        <div className="text-7xl">{victory ? '🏆' : isRogue ? '⚔️' : '💀'}</div>
-        <h1 className={`mt-4 text-4xl font-black tracking-[0.3em] ${victory ? 'text-amber-200' : isRogue ? 'text-purple-300' : 'text-red-400'}`}>
+    <main className="end-scene frontier-art flex min-h-dvh items-center justify-center px-4 py-8">
+      <div className="game-dialog w-full max-w-xl border border-stone-700/60 bg-stone-900/95 p-5 text-center sm:p-10">
+        <span className="campaign-emblem mx-auto" aria-hidden="true">
+          {victory ? <Trophy size={26} /> : isRogue ? <Swords size={26} /> : <ShieldX size={26} />}
+        </span>
+        <h1 className={`game-display mt-4 text-4xl font-bold tracking-widest ${victory ? 'text-amber-200' : isRogue ? 'text-purple-300' : 'text-red-400'}`}>
           {victory ? '胜 利' : isRogue ? '远征落幕' : '战 败'}
         </h1>
         <p className="mt-4 leading-relaxed text-stone-300">
@@ -92,7 +87,8 @@ export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, o
         {isRogue && onRetrySeed && (
           <button
             onClick={onRetrySeed}
-            className="mt-8 w-full rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 py-4 text-lg font-black tracking-[0.3em] text-stone-950 transition hover:from-purple-500 hover:to-purple-400 active:scale-[0.98]"
+            data-tone="violet"
+            className="game-primary mt-8 w-full px-4 py-3"
           >
             同 种 子 再 战
           </button>
@@ -100,20 +96,20 @@ export default function EndScreen({ state, settleInfo, onRestart, onRetrySeed, o
         <button
           onClick={onRestart}
           className={isRogue && onRetrySeed
-            ? 'mt-3 w-full rounded-xl border border-amber-700/60 bg-amber-950/30 py-3 text-sm font-bold text-amber-300 transition hover:bg-amber-900/40 active:scale-[0.98]'
-            : 'mt-8 w-full rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 py-4 text-lg font-black tracking-[0.3em] text-stone-950 transition hover:from-amber-500 hover:to-amber-400 active:scale-[0.98]'}
+            ? 'game-secondary mt-3 w-full px-4 py-3'
+            : 'game-primary mt-8 w-full px-4 py-3'}
         >
           {isRogue ? '新 的 远 征（回开局）' : '再 来 一 局'}
         </button>
         {onLoad && (
           <button
             onClick={onLoad}
-            className="mt-3 w-full rounded-xl border border-stone-700 bg-stone-800/60 py-3 text-sm font-bold text-stone-300 transition hover:border-stone-500 hover:bg-stone-700/60 active:scale-[0.98]"
+            className="game-secondary mt-3 w-full px-4 py-3"
           >
             📂 读取存档
           </button>
         )}
       </div>
-    </div>
+    </main>
   )
 }

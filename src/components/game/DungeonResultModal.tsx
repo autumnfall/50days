@@ -1,3 +1,4 @@
+import { ShieldX, Trophy } from 'lucide-react'
 import type { DungeonResult, BattleRound } from '@/game/engine'
 import type { UnitId } from '@/game/config'
 
@@ -79,15 +80,15 @@ export default function DungeonResultModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg animate-[popIn_0.25s_ease-out] overflow-hidden rounded-2xl border bg-stone-900 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center game-scrim bg-black/60 p-4 backdrop-blur-sm">
+      <div className="game-dialog w-full max-w-lg animate-[popIn_0.25s_ease-out] max-h-[92dvh] overflow-y-auto rounded-2xl border bg-stone-900 shadow-2xl">
         {/* 头部 */}
         <div className={result.won
-          ? 'bg-gradient-to-r from-emerald-900/80 to-emerald-800/60 border-b border-emerald-700/40 p-5'
+          ? 'bg-gradient-to-r from-sky-950 to-stone-900 border-b border-sky-700/40 p-5'
           : 'bg-gradient-to-r from-red-900/80 to-red-800/60 border-b border-red-700/40 p-5'
         }>
-          <div className="text-3xl mb-1">{result.won ? '🏆' : '💀'}</div>
-          <h2 className={result.won ? 'text-lg font-black text-emerald-200' : 'text-lg font-black text-red-200'}>
+          <span className="campaign-emblem mb-2" aria-hidden="true">{result.won ? <Trophy size={23} /> : <ShieldX size={23} />}</span>
+          <h2 className={result.won ? 'text-lg font-black text-sky-100' : 'text-lg font-black text-red-200'}>
             {result.won ? '地牢通关！' : '挑战失败'}
           </h2>
           <p className="text-sm text-stone-400 mt-1">

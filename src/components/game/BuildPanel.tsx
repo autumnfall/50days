@@ -1,7 +1,9 @@
+import { Hammer, UserRoundPlus } from 'lucide-react'
 import { BUILDINGS, CONFIG, type BuildingId } from '@/game/config'
 import { buildCost, canAfford, effectiveMax, farmBonusPer, gatherPerPerson, popCap, population, recruitCost, recruitMaxCount, towerDmg, wallAbsorb, type GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
 import { CostTag, Panel } from './ui-bits'
+import { BUILDING_ICONS } from './icons'
 
 const ORDER: BuildingId[] = ['farm', 'lumber', 'mine', 'house', 'barracks', 'wall', 'tower']
 
@@ -53,7 +55,7 @@ export default function BuildPanel({
   return (
     <Panel
       title="建造与招募"
-      icon="🔨"
+      icon={Hammer}
       data-tutorial="build-panel"
       extra={
         <div className="flex shrink-0 items-center gap-1">
@@ -62,18 +64,18 @@ export default function BuildPanel({
             disabled={!canRecruit}
             className={cn(
               'flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-bold transition whitespace-nowrap',
-              canRecruit ? 'bg-emerald-700/80 text-emerald-100 hover:bg-emerald-600' : 'cursor-not-allowed bg-stone-800 text-stone-500',
+              canRecruit ? 'bg-sky-800/80 text-sky-100 hover:bg-sky-700' : 'cursor-not-allowed bg-stone-800 text-stone-500',
             )}
             title="消耗食物招募一位新村民（需要空余住房）"
           >
-            🧑‍🌾 招募 <CostTag cost={rCost} resources={state.resources} />
+            <UserRoundPlus size={13} aria-hidden="true" /> 招募 <CostTag cost={rCost} resources={state.resources} />
           </button>
           <button
             onClick={onRecruitMax}
             disabled={maxN <= 0}
             className={cn(
               'rounded px-1.5 py-0.5 text-[11px] font-bold transition whitespace-nowrap',
-              maxN > 0 ? 'bg-emerald-900/70 text-emerald-200 hover:bg-emerald-800' : 'cursor-not-allowed bg-stone-800 text-stone-500',
+              maxN > 0 ? 'bg-sky-900/70 text-sky-200 hover:bg-sky-800' : 'cursor-not-allowed bg-stone-800 text-stone-500',
             )}
             title={`一次招募 ${maxN} 人`}
           >
@@ -85,6 +87,7 @@ export default function BuildPanel({
       <div className="space-y-2">
         {ORDER.map((id) => {
           const def = BUILDINGS[id]
+          const BuildingIcon = BUILDING_ICONS[id]
           const lv = state.buildings[id]
           const max = effectiveMax(state, id)
           const maxed = lv >= max
@@ -104,7 +107,7 @@ export default function BuildPanel({
                     : 'cursor-not-allowed border-stone-800 bg-stone-950/40 opacity-70',
               )}
             >
-              <span className="text-2xl">{def.icon}</span>
+              <BuildingIcon className="shrink-0 text-stone-300" size={19} aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <span className="text-sm font-bold text-stone-200">{def.name}</span>

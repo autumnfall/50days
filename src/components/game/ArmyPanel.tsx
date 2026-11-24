@@ -1,7 +1,9 @@
+import { Swords } from 'lucide-react'
 import { UNITS, type UnitId } from '@/game/config'
 import { armyPower, canAfford, soldierCount, trainCost, unitAtk, unitHp, type GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
 import { CostTag, Panel } from './ui-bits'
+import { UNIT_ICONS } from './icons'
 
 const ORDER: UnitId[] = ['militia', 'archer', 'knight', 'warlord']
 
@@ -16,7 +18,7 @@ export default function ArmyPanel({
   return (
     <Panel
       title="军队训练"
-      icon="🎖️"
+      icon={Swords}
       data-tutorial="army-panel"
       extra={
         <span className="text-xs text-stone-400">
@@ -27,6 +29,7 @@ export default function ArmyPanel({
       <div className="space-y-2">
         {ORDER.map((id) => {
           const def = UNITS[id]
+          const UnitIcon = UNIT_ICONS[id]
           const n = state.soldiers[id]
           const locked = state.buildings.barracks < def.reqBarracks
           const unique = id === 'warlord' && n >= 1 // 战神全局唯一
@@ -47,8 +50,8 @@ export default function ArmyPanel({
                     : 'border-stone-700 bg-stone-950/50 hover:border-red-500/50 hover:bg-stone-800/70',
               )}
             >
-              <span className="relative text-2xl">
-                {def.icon}
+              <span className="relative shrink-0 text-stone-300">
+                <UnitIcon size={19} aria-hidden="true" />
                 {n > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
                     {n}

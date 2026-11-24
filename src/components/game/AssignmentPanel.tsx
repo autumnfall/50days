@@ -1,7 +1,9 @@
+import { Users } from 'lucide-react'
 import { CONFIG, RESOURCE_INFO, type ResourceId } from '@/game/config'
 import { gatherPerPerson, idleVillagers, type GameState } from '@/game/engine'
 import { cn } from '@/lib/utils'
 import { Panel } from './ui-bits'
+import { RESOURCE_ICONS } from './icons'
 
 const JOBS: { id: ResourceId; building: 'farm' | 'lumber' | 'mine'; verb: string }[] = [
   { id: 'food', building: 'farm', verb: '务农' },
@@ -29,7 +31,7 @@ export default function AssignmentPanel({
   return (
     <Panel
       title="村民分配"
-      icon="🧑‍🌾"
+      icon={Users}
       data-tutorial="assignment-panel"
       extra={
         <span className="text-xs text-stone-400">
@@ -40,11 +42,12 @@ export default function AssignmentPanel({
       <div className="space-y-2.5">
         {JOBS.map((job) => {
           const info = RESOURCE_INFO[job.id]
+          const ResourceIcon = RESOURCE_ICONS[job.id]
           const n = state.assignment[job.id]
           const per = perCap(job)
           return (
             <div key={job.id} className="flex items-center gap-2 rounded-lg bg-stone-950/50 px-3 py-2">
-              <span className="text-xl">{info.icon}</span>
+              <ResourceIcon className={cn('shrink-0', info.color)} size={18} aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-stone-200">{job.verb}</div>
                 <div className="text-[11px] text-stone-500">

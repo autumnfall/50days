@@ -217,8 +217,7 @@ export async function getDay(page: Page): Promise<number> {
 }
 
 export async function getResource(page: Page, resource: 'food' | 'wood' | 'gold'): Promise<number> {
-  const icons: Record<string, string> = { food: '🌾', wood: '🪵', gold: '🪙' }
-  const resBox = page.locator('[data-tutorial="resources"]').getByText(icons[resource]).locator('..')
+  const resBox = page.locator('[data-tutorial="resources"]').locator(`[data-resource="${resource}"]`)
   const text = await resBox.textContent()
   const match = text?.match(/(\d+)/)
   return match ? parseInt(match[1]) : 0
@@ -332,15 +331,12 @@ export async function getPopulation(page: Page): Promise<[number, number]> {
   const text = await el.textContent({ timeout: 3000 }).catch(() => '')
   // 格式：人口 X/Y（可能在 🏠 图标附近）
   const match = text?.match(/(\d+)\s*\/\s*(\d+)/)
-  if (match) return [parseInt(match[1]), parseInt(match[2])]
-  // 备用：尝试读取 👥 图标附近
-  const match2 = text?.match(/👥\s*(\d+)\s*\/\s*(\d+)/)
-  return match2 ? [parseInt(match2[1]), parseInt(match2[2])] : [0, 0]
+  return match ? [parseInt(match[1]), parseInt(match[2])] : [0, 0]
 }
 
 /** 读取当前食物产量（从食物资源旁的 +X 提示） */
 export async function getFoodIncome(page: Page): Promise<number> {
-  const el = page.locator('[data-tutorial="resources"]').getByText('🌾').locator('..')
+  const el = page.locator('[data-tutorial="resources"]').locator('[data-resource="food"]')
   const text = await el.textContent({ timeout: 3000 }).catch(() => '')
   // 格式可能是：🌾123+5 或 🌾123 (+5)
   const match = text?.match(/\+(\d+)/)
@@ -357,7 +353,7 @@ export async function redistributeVillagers(page: Page, target: {
 }): Promise<void> {
   // 移动端：分配面板只在「村民」Tab 激活时渲染，需先切换
   if ((page.viewportSize()?.width ?? 1280) < 1024) {
-    await page.locator('nav button:has-text("👥")').first().click()
+    await page.getByRole('navigation').getByRole('button', { name: '村民' }).click()
     await page.waitForTimeout(300)
   }
   const panel = page.locator('[data-tutorial="assignment-panel"]').last()

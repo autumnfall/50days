@@ -61,11 +61,18 @@ test.describe('游戏界面元素', () => {
     await expect(page.getByText('第 1 / 50 天')).toBeVisible()
   })
 
+  test('资源、预警和规则按钮在首屏可见', async ({ page }) => {
+    await expect(page.locator('[data-tutorial="resources"]')).toBeInViewport()
+    await expect(page.locator('[data-tutorial="wave-warning"]')).toBeInViewport()
+    await expect(page.getByTitle('游戏规则')).toBeInViewport()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width)
+  })
+
   test('显示初始资源', async ({ page }) => {
     const resources = page.locator('[data-tutorial="resources"]')
-    await expect(resources.getByText('🌾')).toBeVisible()
-    await expect(resources.getByText('🪵')).toBeVisible()
-    await expect(resources.getByText('🪙')).toBeVisible()
+    await expect(resources.locator('[data-resource="food"]')).toBeVisible()
+    await expect(resources.locator('[data-resource="wood"]')).toBeVisible()
+    await expect(resources.locator('[data-resource="gold"]')).toBeVisible()
   })
 
   test('结束回合按钮可用', async ({ page }) => {
@@ -77,7 +84,7 @@ test.describe('游戏界面元素', () => {
   test('村民分配面板有务农/伐木/采矿三行', async ({ page }) => {
     // 移动端需要先切换到 people tab
     if (page.viewportSize()!.width < 1024) {
-      await page.locator('button:has-text("👥")').click()
+      await page.getByRole('navigation').getByRole('button', { name: '村民' }).click()
       await page.waitForTimeout(300)
     }
     // .last() 定位移动端面板（桌面/移动端各有一个同 data-tutorial 属性的面板，移动端在 DOM 中靠后）
@@ -90,7 +97,7 @@ test.describe('游戏界面元素', () => {
   test('建造面板显示7种建筑', async ({ page }) => {
     // 移动端需要先切换到 build tab
     if (page.viewportSize()!.width < 1024) {
-      await page.locator('button:has-text("🔨")').click()
+      await page.getByRole('navigation').getByRole('button', { name: '建造' }).click()
       await page.waitForTimeout(300)
     }
     const panel = page.locator('[data-tutorial="build-panel"]').last()
@@ -102,7 +109,7 @@ test.describe('游戏界面元素', () => {
   test('军队面板显示4种兵种', async ({ page }) => {
     // 移动端需要先切换到 army tab
     if (page.viewportSize()!.width < 1024) {
-      await page.locator('button:has-text("🎖️")').click()
+      await page.getByRole('navigation').getByRole('button', { name: '军队' }).click()
       await page.waitForTimeout(300)
     }
     const panel = page.locator('[data-tutorial="army-panel"]').last()

@@ -4,6 +4,7 @@ import {
   getHeroDef, heroGrowth, heroSkillPoints, heroUpgradeCost, heroXpNeeded,
 } from '@/game/heroes'
 import { Panel } from './ui-bits'
+import { heroIcon } from './icons'
 import { cn } from '@/lib/utils'
 
 /** 英雄面板：等级/经验、战功、技能点分配与主动技 */
@@ -30,7 +31,7 @@ export default function HeroPanel({ state, onUpgrade, onLearnPassive, onLearnAct
   return (
     <Panel
       title={`英雄 · ${def.name}`}
-      icon={def.icon}
+      icon={heroIcon(def.id)}
       extra={<span className="text-xs text-stone-400">技能点 <b className={points > 0 ? 'text-sky-300' : 'text-stone-500'}>{points}</b></span>}
     >
       <div className="space-y-3">

@@ -1,3 +1,4 @@
+import { Flame, Swords, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { UNITS, type UnitId } from '@/game/config'
 import type { BattleReport } from '@/game/engine'
@@ -32,22 +33,22 @@ export default function BattleModal({ report, onClose, closeLabel = '继续坚�
   const enemiesLeft = done ? (cur?.enemiesLeft ?? startEnemies) : (cur?.enemiesLeft ?? startEnemies)
 
   return (
-    <div data-testid="battle-report" className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+    <div data-testid="battle-report" className="fixed inset-0 z-50 flex items-center justify-center game-scrim bg-black/75 p-4 backdrop-blur-sm">
       <div className={cn(
-        'w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border shadow-2xl transition-colors',
+        'game-dialog w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border shadow-2xl transition-colors',
         done ? (report.won ? 'border-amber-500/70' : 'border-red-600/70') : 'border-stone-600',
         'bg-stone-900',
       )}>
         {/* 标题 */}
         <div className={cn('px-6 py-4 text-center', done ? (report.won ? 'bg-amber-950/60' : 'bg-red-950/60') : 'bg-stone-950/60')}>
-          <div className={cn('text-4xl transition-transform', !done && 'animate-bounce')}>
-            {!done ? '⚔️' : report.won ? '🏆' : '🔥'}
-          </div>
+          <span className="campaign-emblem mx-auto" aria-hidden="true">
+            {!done ? <Swords size={23} /> : report.won ? <Trophy size={23} /> : <Flame size={23} />}
+          </span>
           <h2 className={cn('mt-1 text-xl font-black tracking-widest', done ? (report.won ? 'text-amber-200' : 'text-red-300') : 'text-stone-200')}>
             {!done ? '战斗进行中…' : report.won ? '村庄守住了！' : '防线被突破！'}
           </h2>
           <p className="mt-1 text-xs text-stone-400">
-            第 {wave.wave} 波 · {wave.icon} {wave.name} × {startEnemies}
+            第 {wave.wave} 波 · {wave.name} × {startEnemies}
           </p>
           {report.modifier && (
             <div className="mx-auto mt-2 inline-flex items-center gap-1.5 rounded-lg border border-purple-700/50 bg-purple-950/40 px-2.5 py-1 text-[11px] text-purple-200" title={report.modifier.desc}>
@@ -62,7 +63,7 @@ export default function BattleModal({ report, onClose, closeLabel = '继续坚�
             <div className="mt-3">
               <div className="flex items-center justify-between text-[10px] text-stone-400">
                 <span>🛡️ 我方</span>
-                <span className="font-bold text-red-300">{wave.icon} 余敌 {enemiesLeft}/{startEnemies}</span>
+                <span className="font-bold text-red-300">余敌 {enemiesLeft}/{startEnemies}</span>
               </div>
               <div className="mt-1 h-2 overflow-hidden rounded-full bg-stone-800">
                 <div

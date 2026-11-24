@@ -1,3 +1,4 @@
+import { Gift } from 'lucide-react'
 import { Panel } from './ui-bits'
 import { getRelic } from '@/game/relics'
 import type { GameState } from '@/game/engine'
@@ -5,7 +6,7 @@ import type { GameState } from '@/game/engine'
 export default function RelicPanel({ state }: { state: GameState }) {
   if (state.mode !== 'rogue' || !state.run || state.run.relics.length === 0) return null
   return (
-    <Panel title="远征遗物" icon="🎁" className="border-purple-700/40 bg-purple-950/20">
+    <Panel title="远征遗物" icon={Gift} className="border-purple-700/40 bg-purple-950/20">
       <div className="grid grid-cols-1 gap-1.5">
         {state.run.relics.map((id) => {
           const r = getRelic(id)
